@@ -1,0 +1,35 @@
+// https://typestrong.org/ts-node/docs/configuration/
+{
+  "extends": "ts-node/node16/tsconfig.json",
+  "ts-node": {
+    "files": true,
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  },
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "removeComments": true,
+    "noLib": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "useUnknownInCatchVariables": false,
+    "strictPropertyInitialization": false,
+    "target": "es6",
+    "sourceMap": true,
+    "strict": true,
+    "allowJs": true,
+    "outDir": "dist",
+    "lib": ["es7"],
+    "resolveJsonModule": true,
+    "paths": {
+      "@types": ["./types"]
+    }
+  },
+  "include": ["*.ts", "*.d.ts", "*.json", "lib/**/*", "types/*"],
+  "exclude": ["node_modules", "test/**/*"]
+}
