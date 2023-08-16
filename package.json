@@ -21,14 +21,7 @@
     "dist/*"
   ],
   "exports": {
-    ".": {
-      "types": "./dist/main.d.ts",
-      "import": "./dist/main.js"
-    },
-    "./feature1/index.js": {
-      "types": "./dist/lib/feature1/*.d.ts",
-      "import": "./dist/lib/feature1/*.js"
-    }
+    "./features/*.js": "./lib/features/*.js"
   },
   "engines": {
     "node": ">=16"
