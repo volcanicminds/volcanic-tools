@@ -1,29 +1,46 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![opensource](https://img.shields.io/badge/open-source-blue)](https://en.wikipedia.org/wiki/Open_source)
 [![volcanic-typeorm](https://img.shields.io/badge/volcanic-minds-orange)](https://github.com/volcanicminds/volcanic-typeorm)
-[![npm](https://img.shields.io/badge/package-npm-white)](https://www.npmjs.com/package/@volcanicminds/typeorm)
+[![npm](https://img.shields.io/badge/package-npm-white)](https://www.npmjs.com/package/@volcanicminds/tools)
 
 # volcanic-tools
 
-## How to install
+Tools for the volcanic (minds) backend. This library provides a collection of modular utilities designed to be tree-shakeable.
 
-```js
-yarn add @volcanicminds/tools
+## Installation
+
+```bash
+npm install @volcanicminds/tools
 ```
-
-It's possible use this module with module [`@volcanicminds/backend`](https://github.com/volcanicminds/volcanic-backend)
 
 ## How to upgrade packages
 
-```js
-yarn upgrade-deps
+```bash
+npm run upgrade-deps
 ```
 
-## Enviroment
+## Environment
 
-```rb
+```bash
 # or automatically use LOG_LEVEL
 SOME_KEY=true
+```
+
+## Usage
+
+This package supports both root imports and sub-path imports to optimize bundle size.
+
+### Import everything
+
+```typescript
+import { feature1, feature2 } from '@volcanicminds/tools'
+```
+
+### Import specific features (Recommended for smaller bundles)
+
+```typescript
+import { feature1 } from '@volcanicminds/tools/feature1'
+import * as logger from '@volcanicminds/tools/logger'
 ```
 
 ## Logging
