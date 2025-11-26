@@ -1,3 +1,3 @@
-export default function main() {
-  console.log('This is the feature1 export')
+export function feature2() {
+  console.log('This is an feature2 export')
 }

@@ -1,11 +1,5 @@
 'use strict'
 
-import feature1 from './lib/feature1'
-import feature2 from './lib/feature2'
-
-module.exports = { feature1, feature2 }
-module.exports.feature1 = feature1
-module.exports.feature2 = feature2
-module.exports.default = { feature1, feature2 }
-
-export { feature1, feature2 }
+export * from './lib/feature1'
+export * from './lib/feature2'
+export * as log from './lib/util/logger'

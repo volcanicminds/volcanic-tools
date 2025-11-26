@@ -1,7 +1,6 @@
 {
   "name": "@volcanicminds/tools",
   "version": "0.0.1",
-  "type": "module",
   "license": "MIT",
   "description": "Tools for the volcanic (minds) backend",
   "keywords": [
@@ -11,20 +10,39 @@
     "typescript",
     "javascript"
   ],
-  "main": "index.js",
-  "module": "index.js",
+  "main": "dist/index.js",
+  "module": "esm/index.js",
   "types": "dist/index.d.ts",
-  "directories": {
-    "lib": "lib"
-  },
+  "sideEffects": false,
   "files": [
-    "dist/*"
+    "dist",
+    "esm",
+    "lib"
   ],
   "exports": {
-    "./features/*.js": "./lib/features/*.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./esm/index.js",
+      "require": "./dist/index.js"
+    },
+    "./feature1": {
+      "types": "./dist/lib/feature1/index.d.ts",
+      "import": "./esm/lib/feature1/index.js",
+      "require": "./dist/lib/feature1/index.js"
+    },
+    "./feature2": {
+      "types": "./dist/lib/feature2/index.d.ts",
+      "import": "./esm/lib/feature2/index.js",
+      "require": "./dist/lib/feature2/index.js"
+    },
+    "./logger": {
+      "types": "./dist/lib/util/logger.d.ts",
+      "import": "./esm/lib/util/logger.js",
+      "require": "./dist/lib/util/logger.js"
+    }
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=24"
   },
   "scripts": {
     "clean": "rm -rf dist esm",
@@ -33,13 +51,13 @@
     "build:cjs": "tsc --target es2015 --module commonjs --outDir dist",
     "build": "npm run build:esm && npm run build:cjs",
     "compile": "npm run build",
-    "reset": "yarn && yarn upgrade && yarn compile",
-    "upgrade-deps": "yarn upgrade-interactive"
+    "reset": "npm install && npm update && npm run compile",
+    "upgrade-deps": "npx npm-check-updates -u"
   },
   "devDependencies": {
-    "@types/node": "^18.11.10",
-    "ts-node": "^10.9.1",
-    "typescript": "^4.9.3"
+    "@types/node": "^24.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

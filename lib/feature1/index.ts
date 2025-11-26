@@ -1,3 +1,3 @@
-export default function alternativeMain() {
-  console.log('This is an feature2 export')
+export function feature1() {
+  console.log('This is the feature1 export')
 }

@@ -1,3 +1,3 @@
-export default function main() {
+export function main() {
   console.log('This is the main export')
 }
