@@ -1,8 +1,6 @@
 {
   "name": "@volcanicminds/tools",
   "version": "0.0.2",
-  "type": "module",
-  "license": "MIT",
   "description": "Tools for the volcanic (minds) backend",
   "keywords": [
     "volcanic",
@@ -14,14 +12,24 @@
     "otp",
     "totp"
   ],
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "lib"
+  "homepage": "https://volcanicminds.com",
+  "bugs": {
+    "url": "https://github.com/volcanicminds/volcanic-tools/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/volcanicminds/volcanic-tools.git"
+  },
+  "license": "MIT",
+  "author": "Volcanic Minds <developers@volcanicminds.com> (https://volcanicminds.com)",
+  "maintainers": [
+    {
+      "name": "Developers",
+      "email": "developers@volcanicminds.com",
+      "url": "https://volcanicminds.com"
+    }
   ],
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -39,22 +47,15 @@
       "require": "./dist/lib/util/logger.js"
     }
   },
-  "typesVersions": {
-    "*": {
-      "*": [
-        "dist/index.d.ts"
-      ],
-      "mfa": [
-        "dist/lib/mfa/index.d.ts"
-      ],
-      "logger": [
-        "dist/lib/util/logger.d.ts"
-      ]
-    }
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "directories": {
+    "lib": "lib"
   },
-  "engines": {
-    "node": ">=24"
-  },
+  "files": [
+    "dist",
+    "lib"
+  ],
   "scripts": {
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
@@ -73,16 +74,22 @@
     "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/volcanicminds/volcanic-tools.git"
+  "engines": {
+    "node": ">=24"
   },
-  "homepage": "https://volcanicminds.com",
-  "bugs": {
-    "url": "https://github.com/volcanicminds/volcanic-tools/issues"
-  },
-  "author": "Volcanic Minds <developers@volcanicminds.com> (https://volcanicminds.com)",
-  "maintainers": [
-    "Developers <developers@volcanicminds.com> (https://volcanicminds.com)"
-  ]
+  "module": "dist/index.js",
+  "sideEffects": false,
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/index.d.ts"
+      ],
+      "mfa": [
+        "dist/lib/mfa/index.d.ts"
+      ],
+      "logger": [
+        "dist/lib/util/logger.d.ts"
+      ]
+    }
+  }
 }
