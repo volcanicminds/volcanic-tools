@@ -1,6 +1,6 @@
 {
   "name": "@volcanicminds/tools",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "license": "MIT",
   "description": "Tools for the volcanic (minds) backend",
@@ -9,7 +9,10 @@
     "open source",
     "tools",
     "typescript",
-    "esm"
+    "esm",
+    "mfa",
+    "otp",
+    "totp"
   ],
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -25,15 +28,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
-    "./feature1": {
-      "types": "./dist/lib/feature1/index.d.ts",
-      "import": "./dist/lib/feature1/index.js",
-      "require": "./dist/lib/feature1/index.js"
-    },
-    "./feature2": {
-      "types": "./dist/lib/feature2/index.d.ts",
-      "import": "./dist/lib/feature2/index.js",
-      "require": "./dist/lib/feature2/index.js"
+    "./mfa": {
+      "types": "./dist/lib/mfa/index.d.ts",
+      "import": "./dist/lib/mfa/index.js",
+      "require": "./dist/lib/mfa/index.js"
     },
     "./logger": {
       "types": "./dist/lib/util/logger.d.ts",
@@ -46,11 +44,8 @@
       "*": [
         "dist/index.d.ts"
       ],
-      "feature1": [
-        "dist/lib/feature1/index.d.ts"
-      ],
-      "feature2": [
-        "dist/lib/feature2/index.d.ts"
+      "mfa": [
+        "dist/lib/mfa/index.d.ts"
       ],
       "logger": [
         "dist/lib/util/logger.d.ts"
@@ -68,8 +63,13 @@
     "upgrade-deps": "npx npm-check-updates -u",
     "combine": "node combine.js"
   },
+  "dependencies": {
+    "otpauth": "^9.3.5",
+    "qrcode": "^1.5.4"
+  },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@types/qrcode": "^1.5.5",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   },

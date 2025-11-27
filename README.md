@@ -33,14 +33,30 @@ This package supports both root imports and sub-path imports to optimize bundle 
 ### Import everything
 
 ```typescript
-import { feature1, feature2 } from '@volcanicminds/tools'
+import { mfa, log } from '@volcanicminds/tools'
 ```
 
 ### Import specific features (Recommended for smaller bundles)
 
 ```typescript
-import { feature1 } from '@volcanicminds/tools/feature1'
+import * as mfa from '@volcanicminds/tools/mfa'
 import * as logger from '@volcanicminds/tools/logger'
+```
+
+## Features
+
+### MFA (Multi-Factor Authentication)
+
+Utilities for generating secrets, QR codes, and verifying TOTP tokens.
+
+```typescript
+import * as mfa from '@volcanicminds/tools/mfa'
+
+// Generate Setup
+const { secret, uri, qrCode } = await mfa.generateSetupDetails('MyApp', 'user@example.com')
+
+// Verify Token
+const isValid = mfa.verifyToken('123456', secret)
 ```
 
 ## Logging
