@@ -1,4 +1,4 @@
-# Volcanic Tools - Updated At 2025-11-26T09:40:50.778Z
+# Volcanic Tools - Updated At 2025-11-26T11:45:10.329Z
 
 Below are all the files, materials and documentation of the project to analyze.
 
@@ -36,7 +36,7 @@ Below are all the files, materials and documentation of the project to analyze.
 ## File: .nvmrc
 
 ```javascript
-v18.12.0
+v24.11.0
 
 ```
 
@@ -46,29 +46,46 @@ v18.12.0
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![opensource](https://img.shields.io/badge/open-source-blue)](https://en.wikipedia.org/wiki/Open_source)
 [![volcanic-typeorm](https://img.shields.io/badge/volcanic-minds-orange)](https://github.com/volcanicminds/volcanic-typeorm)
-[![npm](https://img.shields.io/badge/package-npm-white)](https://www.npmjs.com/package/@volcanicminds/typeorm)
+[![npm](https://img.shields.io/badge/package-npm-white)](https://www.npmjs.com/package/@volcanicminds/tools)
 
 # volcanic-tools
 
-## How to install
+Tools for the volcanic (minds) backend. This library provides a collection of modular utilities designed to be tree-shakeable.
 
-```js
-yarn add @volcanicminds/tools
+## Installation
+
+```bash
+npm install @volcanicminds/tools
 ```
-
-It's possible use this module with module [`@volcanicminds/backend`](https://github.com/volcanicminds/volcanic-backend)
 
 ## How to upgrade packages
 
-```js
-yarn upgrade-deps
+```bash
+npm run upgrade-deps
 ```
 
-## Enviroment
+## Environment
 
-```rb
+```bash
 # or automatically use LOG_LEVEL
 SOME_KEY=true
+```
+
+## Usage
+
+This package supports both root imports and sub-path imports to optimize bundle size.
+
+### Import everything
+
+```typescript
+import { feature1, feature2 } from '@volcanicminds/tools'
+```
+
+### Import specific features (Recommended for smaller bundles)
+
+```typescript
+import { feature1 } from '@volcanicminds/tools/feature1'
+import * as logger from '@volcanicminds/tools/logger'
 ```
 
 ## Logging
@@ -87,17 +104,9 @@ export { MyInterface } from './types/global'
 ## File: index.ts
 
 ```typescript
-'use strict'
-
-import feature1 from './lib/feature1/index.js'
-import feature2 from './lib/feature2/index.js'
-
-module.exports = { feature1, feature2 }
-module.exports.feature1 = feature1
-module.exports.feature2 = feature2
-module.exports.default = { feature1, feature2 }
-
-export { feature1, feature2 }
+export * from './lib/feature1/index.js'
+export * from './lib/feature2/index.js'
+export * as log from './lib/util/logger.js'
 
 ```
 
@@ -107,6 +116,7 @@ export { feature1, feature2 }
 {
   "name": "@volcanicminds/tools",
   "version": "0.0.1",
+  "type": "module",
   "license": "MIT",
   "description": "Tools for the volcanic (minds) backend",
   "keywords": [
@@ -114,45 +124,69 @@ export { feature1, feature2 }
     "open source",
     "tools",
     "typescript",
-    "javascript"
+    "esm"
   ],
-  "main": "index.js",
-  "module": "index.js",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "directories": {
-    "lib": "lib"
-  },
+  "sideEffects": false,
   "files": [
-    "dist/*"
+    "dist",
+    "lib"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     },
-    "./*.js": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js"
+    "./feature1": {
+      "types": "./dist/lib/feature1/index.d.ts",
+      "import": "./dist/lib/feature1/index.js",
+      "require": "./dist/lib/feature1/index.js"
+    },
+    "./feature2": {
+      "types": "./dist/lib/feature2/index.d.ts",
+      "import": "./dist/lib/feature2/index.js",
+      "require": "./dist/lib/feature2/index.js"
+    },
+    "./logger": {
+      "types": "./dist/lib/util/logger.d.ts",
+      "import": "./dist/lib/util/logger.js",
+      "require": "./dist/lib/util/logger.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/index.d.ts"
+      ],
+      "feature1": [
+        "dist/lib/feature1/index.d.ts"
+      ],
+      "feature2": [
+        "dist/lib/feature2/index.d.ts"
+      ],
+      "logger": [
+        "dist/lib/util/logger.d.ts"
+      ]
     }
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=24"
   },
   "scripts": {
-    "clean": "rm -rf dist esm",
+    "clean": "rm -rf dist",
     "prebuild": "npm run clean",
-    "build:esm": "tsc --target es2018 --outDir esm",
-    "build:cjs": "tsc --target es2015 --module commonjs --outDir dist",
-    "build": "npm run build:esm && npm run build:cjs",
-    "compile": "npm run build",
-    "reset": "yarn && yarn upgrade && yarn compile",
-    "upgrade-deps": "yarn upgrade-interactive",
+    "build": "tsc",
+    "reset": "npm install && npm update && npm run build",
+    "upgrade-deps": "npx npm-check-updates -u",
     "combine": "node combine.js"
   },
   "devDependencies": {
-    "@types/node": "^18.11.10",
-    "ts-node": "^10.9.1",
-    "typescript": "^4.9.3"
+    "@types/node": "^24.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",
@@ -173,14 +207,31 @@ export { feature1, feature2 }
 ## File: tsconfig.json
 
 ```javascript
-// https://typestrong.org/ts-node/docs/configuration/
 {
   "compilerOptions": {
-    "module": "ES2020",
-    "moduleResolution": "Node16",
-    "outDir": "dist"
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "paths": {
+      "@types": ["./types"]
+    }
   },
-  "src": ["lib"]
+  "include": ["*.ts", "*.d.ts", "lib/**/*", "types/*"],
+  "exclude": ["node_modules", "dist", "test"]
 }
 
 ```
@@ -188,8 +239,8 @@ export { feature1, feature2 }
 ## File: lib/feature1/index.ts
 
 ```typescript
-export default function alternativeMain() {
-  console.log('This is an feature2 export')
+export function feature1() {
+  console.log('This is the feature1 export')
 }
 
 ```
@@ -197,8 +248,8 @@ export default function alternativeMain() {
 ## File: lib/feature2/index.ts
 
 ```typescript
-export default function main() {
-  console.log('This is the feature1 export')
+export function feature2() {
+  console.log('This is an feature2 export')
 }
 
 ```
@@ -206,7 +257,7 @@ export default function main() {
 ## File: lib/main.ts
 
 ```typescript
-export default function main() {
+export function main() {
   console.log('This is the main export')
 }
 

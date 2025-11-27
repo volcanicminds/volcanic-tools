@@ -1,6 +1,7 @@
 {
   "name": "@volcanicminds/tools",
   "version": "0.0.1",
+  "type": "module",
   "license": "MIT",
   "description": "Tools for the volcanic (minds) backend",
   "keywords": [
@@ -8,55 +9,68 @@
     "open source",
     "tools",
     "typescript",
-    "javascript"
+    "esm"
   ],
   "main": "dist/index.js",
-  "module": "esm/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "sideEffects": false,
   "files": [
     "dist",
-    "esm",
     "lib"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./esm/index.js",
+      "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
     "./feature1": {
       "types": "./dist/lib/feature1/index.d.ts",
-      "import": "./esm/lib/feature1/index.js",
+      "import": "./dist/lib/feature1/index.js",
       "require": "./dist/lib/feature1/index.js"
     },
     "./feature2": {
       "types": "./dist/lib/feature2/index.d.ts",
-      "import": "./esm/lib/feature2/index.js",
+      "import": "./dist/lib/feature2/index.js",
       "require": "./dist/lib/feature2/index.js"
     },
     "./logger": {
       "types": "./dist/lib/util/logger.d.ts",
-      "import": "./esm/lib/util/logger.js",
+      "import": "./dist/lib/util/logger.js",
       "require": "./dist/lib/util/logger.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/index.d.ts"
+      ],
+      "feature1": [
+        "dist/lib/feature1/index.d.ts"
+      ],
+      "feature2": [
+        "dist/lib/feature2/index.d.ts"
+      ],
+      "logger": [
+        "dist/lib/util/logger.d.ts"
+      ]
     }
   },
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "clean": "rm -rf dist esm",
+    "clean": "rm -rf dist",
     "prebuild": "npm run clean",
-    "build:esm": "tsc --target es2018 --outDir esm",
-    "build:cjs": "tsc --target es2015 --module commonjs --outDir dist",
-    "build": "npm run build:esm && npm run build:cjs",
-    "compile": "npm run build",
-    "reset": "npm install && npm update && npm run compile",
-    "upgrade-deps": "npx npm-check-updates -u"
+    "build": "tsc",
+    "reset": "npm install && npm update && npm run build",
+    "upgrade-deps": "npx npm-check-updates -u",
+    "combine": "node combine.js"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   },
   "repository": {

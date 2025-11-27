@@ -1,5 +1,5 @@
-const fs = require('fs')
-const path = require('path')
+import * as fs from 'fs'
+import * as path from 'path'
 
 const MAIN_DIRECTORY = './'
 const INCLUDE_FILES = ['package.json', 'tsconfig.json', 'README.md', '.nvmrc', 'index.ts', 'index.d.ts']
