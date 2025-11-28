@@ -1,6 +1,6 @@
 {
   "name": "@volcanicminds/tools",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Tools for the volcanic (minds) backend",
   "keywords": [
     "volcanic",
@@ -62,6 +62,10 @@
     "build": "tsc",
     "reset": "npm install && npm update && npm run build",
     "upgrade-deps": "npx npm-check-updates -u",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "type-check": "tsc --noEmit",
+    "check-all": "npm run lint && npm run type-check",
     "combine": "node combine.js"
   },
   "dependencies": {
@@ -69,10 +73,14 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/qrcode": "^1.5.5",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0"
   },
   "engines": {
     "node": ">=24"
