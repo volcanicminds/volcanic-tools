@@ -5,7 +5,7 @@ const MAIN_DIRECTORY = './'
 const INCLUDE_FILES = ['package.json', 'tsconfig.json', 'README.md', '.nvmrc', 'index.ts', 'index.d.ts']
 const SUB_DIRECTORIES = ['lib', 'types']
 const OUTPUT_FILE = 'OUTPUT.md'
-const CUSTOM_TITLE = 'Volcanic Tools'
+const CUSTOM_TITLE = '@volcanicminds/tools'
 
 /**
  * Recursively collects .js and .ts files from a given directory.
