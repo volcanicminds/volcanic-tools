@@ -1,6 +1,6 @@
 {
   "name": "@volcanicminds/tools",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Tools for the volcanic (minds) backend",
   "keywords": [
     "volcanic",
@@ -10,7 +10,9 @@
     "esm",
     "mfa",
     "otp",
-    "totp"
+    "totp",
+    "mailer",
+    "nodemailer"
   ],
   "homepage": "https://volcanicminds.com",
   "bugs": {
@@ -41,6 +43,11 @@
       "import": "./dist/lib/mfa/index.js",
       "require": "./dist/lib/mfa/index.js"
     },
+    "./mailer": {
+      "types": "./dist/lib/mailer/index.d.ts",
+      "import": "./dist/lib/mailer/index.js",
+      "require": "./dist/lib/mailer/index.js"
+    },
     "./logger": {
       "types": "./dist/lib/util/logger.d.ts",
       "import": "./dist/lib/util/logger.js",
@@ -69,12 +76,14 @@
     "combine": "node combine.js"
   },
   "dependencies": {
+    "nodemailer": "^6.10.1",
     "otpauth": "^9.3.5",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
+    "@types/nodemailer": "^6.4.14",
     "@types/qrcode": "^1.5.5",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
@@ -94,6 +103,9 @@
       ],
       "mfa": [
         "dist/lib/mfa/index.d.ts"
+      ],
+      "mailer": [
+        "dist/lib/mailer/index.d.ts"
       ],
       "logger": [
         "dist/lib/util/logger.d.ts"
