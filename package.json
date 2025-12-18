@@ -1,6 +1,6 @@
 {
   "name": "@volcanicminds/tools",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Tools for the volcanic (minds) backend",
   "keywords": [
     "volcanic",
@@ -12,7 +12,10 @@
     "otp",
     "totp",
     "mailer",
-    "nodemailer"
+    "nodemailer",
+    "storage",
+    "minio",
+    "s3"
   ],
   "homepage": "https://volcanicminds.com",
   "bugs": {
@@ -52,6 +55,11 @@
       "types": "./dist/lib/util/logger.d.ts",
       "import": "./dist/lib/util/logger.js",
       "require": "./dist/lib/util/logger.js"
+    },
+    "./storage": {
+      "types": "./dist/lib/storage/index.d.ts",
+      "import": "./dist/lib/storage/index.js",
+      "require": "./dist/lib/storage/index.js"
     }
   },
   "main": "dist/index.js",
@@ -76,12 +84,14 @@
     "combine": "node combine.js"
   },
   "dependencies": {
+    "minio": "^8.0.6",
     "nodemailer": "^6.10.1",
     "otpauth": "^9.3.5",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/minio": "^7.1.1",
     "@types/node": "^24.10.1",
     "@types/nodemailer": "^6.4.14",
     "@types/qrcode": "^1.5.5",
@@ -109,6 +119,9 @@
       ],
       "logger": [
         "dist/lib/util/logger.d.ts"
+      ],
+      "storage": [
+        "dist/lib/storage/index.d.ts"
       ]
     }
   }
