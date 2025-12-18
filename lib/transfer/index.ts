@@ -26,12 +26,13 @@ export interface TransferConfig {
   }
 }
 
-// Updated definition to handle 'string' ID from POST_TERMINATE
 export type TransferEventCallback = (uploadOrId: Upload | string, req?: IncomingMessage, res?: ServerResponse) => void
+export type TransferValidator = (req: IncomingMessage, res: ServerResponse) => Promise<void>
 
 export class TransferManager {
   private server: Server
   private config: TransferConfig
+  private validator: TransferValidator | null = null
 
   constructor(config: TransferConfig) {
     this.config = config
@@ -41,8 +42,17 @@ export class TransferManager {
       path: config.path,
       datastore: store,
       maxSize: config.maxSize,
-      respectForwardedHeaders: true
+      respectForwardedHeaders: true,
+      onIncomingRequest: async (req, res) => {
+        if (this.validator) {
+          await this.validator(req as unknown as IncomingMessage, res as unknown as ServerResponse)
+        }
+      }
     })
+  }
+
+  public setValidator(validator: TransferValidator) {
+    this.validator = validator
   }
 
   private createStore() {
