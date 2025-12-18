@@ -15,7 +15,10 @@
     "nodemailer",
     "storage",
     "minio",
-    "s3"
+    "s3",
+    "tus",
+    "upload",
+    "transfer"
   ],
   "homepage": "https://volcanicminds.com",
   "bugs": {
@@ -60,6 +63,11 @@
       "types": "./dist/lib/storage/index.d.ts",
       "import": "./dist/lib/storage/index.js",
       "require": "./dist/lib/storage/index.js"
+    },
+    "./transfer": {
+      "types": "./dist/lib/transfer/index.d.ts",
+      "import": "./dist/lib/transfer/index.js",
+      "require": "./dist/lib/transfer/index.js"
     }
   },
   "main": "dist/index.js",
@@ -84,9 +92,13 @@
     "combine": "node combine.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.954.0",
+    "@tus/file-store": "^2.0.0",
+    "@tus/s3-store": "^2.0.1",
+    "@tus/server": "^2.3.0",
     "minio": "^8.0.6",
-    "nodemailer": "^6.10.1",
-    "otpauth": "^9.3.5",
+    "nodemailer": "^7.0.11",
+    "otpauth": "^9.4.1",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
@@ -122,6 +134,9 @@
       ],
       "storage": [
         "dist/lib/storage/index.d.ts"
+      ],
+      "transfer": [
+        "dist/lib/transfer/index.d.ts"
       ]
     }
   }
