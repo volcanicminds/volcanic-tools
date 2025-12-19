@@ -51,6 +51,10 @@ export class TransferManager {
     })
   }
 
+  public isImplemented(): boolean {
+    return true
+  }
+
   public setValidator(validator: TransferValidator) {
     this.validator = validator
   }
