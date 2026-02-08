@@ -68,6 +68,11 @@
       "types": "./dist/lib/transfer/index.d.ts",
       "import": "./dist/lib/transfer/index.js",
       "require": "./dist/lib/transfer/index.js"
+    },
+    "./tenant": {
+      "types": "./dist/lib/tenant/index.d.ts",
+      "import": "./dist/lib/tenant/index.js",
+      "require": "./dist/lib/tenant/index.js"
     }
   },
   "main": "dist/index.js",
@@ -137,6 +142,9 @@
       ],
       "transfer": [
         "dist/lib/transfer/index.d.ts"
+      ],
+      "tenant": [
+        "dist/lib/tenant/index.d.ts"
       ]
     }
   }
