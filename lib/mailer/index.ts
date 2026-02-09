@@ -80,7 +80,7 @@ export class Mailer {
    * @param options Mail options including to, subject, html, etc.
    * @returns The info object from nodemailer.
    */
-  public async send(options: MailOptions): Promise<any> {
+  public async send(options: MailOptions): Promise<unknown> {
     const from = options.from || this.defaultFrom
     const replyTo = options.replyTo || this.defaultReplyTo
 
@@ -112,8 +112,9 @@ export class Mailer {
     try {
       const info = await this.transporter.sendMail(mailPayload)
       return info
-    } catch (error: any) {
-      throw new Error(`Failed to send email to ${mailPayload.to}: ${error.message}`)
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to send email to ${mailPayload.to}: ${msg}`)
     }
   }
 

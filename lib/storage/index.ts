@@ -117,8 +117,8 @@ export class StorageManager {
     try {
       await this.client.statObject(this.bucket, objectName)
       return true
-    } catch (error: any) {
-      if (error.code === 'NotFound') {
+    } catch (error: unknown) {
+      if ((error as { code?: string }).code === 'NotFound') {
         return false
       }
       throw error

@@ -68,7 +68,7 @@
       "types": "./dist/lib/transfer/index.d.ts",
       "import": "./dist/lib/transfer/index.js",
       "require": "./dist/lib/transfer/index.js"
-    },
+    }
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
