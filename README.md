@@ -13,6 +13,11 @@ Tools for the volcanic (minds) backend. This library provides a collection of mo
 npm install @volcanicminds/tools
 ```
 
+## Requirements
+
+- Node.js >= 24.x
+- ESM project (`"type": "module"`)
+
 ## How to upgrade packages
 
 ```bash
@@ -29,6 +34,8 @@ This package supports both root imports and sub-path imports to optimize bundle 
 import * as mfa from '@volcanicminds/tools/mfa'
 import { Mailer } from '@volcanicminds/tools/mailer'
 import * as logger from '@volcanicminds/tools/logger'
+import { StorageManager } from '@volcanicminds/tools/storage'
+import { TransferManager } from '@volcanicminds/tools/transfer'
 ```
 
 ---
@@ -135,4 +142,104 @@ import * as log from '@volcanicminds/tools/logger'
 
 log.info('Application started')
 log.error({ err: new Error('Oops') }, 'Something went wrong')
+```
+
+---
+
+### Storage (S3 / Minio)
+
+A robust wrapper around the `minio` client to handle file operations on S3-compatible storage.
+
+```typescript
+import { StorageManager } from '@volcanicminds/tools/storage'
+
+const storage = new StorageManager({
+  endPoint: 'minio.example.com',
+  port: 9000,
+  useSSL: true,
+  accessKey: 'minioadmin',
+  secretKey: 'minioadmin',
+  bucket: 'my-bucket',
+  region: 'us-east-1'
+})
+
+// Check connection
+const isConnected = await storage.verifyConnection() // true/false
+
+// Upload a file (Stream, Buffer, or Path)
+const info = await storage.uploadFile('folder/image.png', fileBuffer, {
+  contentType: 'image/png',
+  metadata: { userId: '123' }
+})
+console.log('ETag:', info.etag)
+
+// Generate Presigned URLs (for frontend direct access)
+const downloadUrl = await storage.getFileUrl('folder/image.png', 3600) // Expires in 1h
+const uploadUrl = await storage.getUploadUrl('folder/new-image.png', 3600)
+
+// Check existence
+const exists = await storage.fileExists('folder/image.png')
+
+// Delete
+await storage.deleteFile('folder/image.png')
+```
+
+---
+
+### Transfer (Resumable Uploads - Tus.io)
+
+A wrapper around `@tus/server` to implement resumable file uploads (standard protocol). Supports both local filesystem and S3 backends.
+
+#### Initialization
+
+```typescript
+import { TransferManager } from '@volcanicminds/tools/transfer'
+
+const transfer = new TransferManager({
+  driver: 'local', // or 's3'
+  path: '/files', // The HTTP endpoint path (e.g. http://localhost:3000/files)
+  maxSize: 10 * 1024 * 1024 * 1024, // 10 GB
+
+  // If driver is 'local'
+  local: {
+    directory: './uploads'
+  },
+
+  // If driver is 's3'
+  s3: {
+    bucket: 'uploads',
+    endPoint: 'minio.example.com',
+    accessKey: '...',
+    secretKey: '...',
+    partSize: 8 * 1024 * 1024 // 8MB chunks
+  }
+})
+```
+
+#### Integration with Fastify/Node Key
+
+The `transfer` instance exposes a standard Node.js request handler (`handle`). You can use it within a Fastify route or raw Node server.
+
+```typescript
+// Fastify Example
+fastify.all('/files/*', async (req, reply) => {
+  // Pass the raw Node.js request/response objects to Tus
+  await transfer.handle(req.raw, reply.raw)
+  // Prevent Fastify from sending a response, Tus handles it
+  reply.sent = true
+})
+```
+
+#### Events
+
+You can listen for upload lifecycle events:
+
+```typescript
+transfer.onUploadCreate((upload, req, res) => {
+  console.log('Upload started:', upload.id)
+})
+
+transfer.onUploadFinish((upload, req, res) => {
+  console.log('Upload finished:', upload.id)
+})
 ```
