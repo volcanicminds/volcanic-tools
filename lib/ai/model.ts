@@ -39,20 +39,19 @@ export async function createModel(config?: ModelConfig): Promise<LanguageModel> 
   switch (provider) {
     case 'openai': {
       if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-ignore dynamic import
+      // @ts-expect-error dynamic import
       const { openai } = await import('@ai-sdk/openai')
       return openai(modelName, { apiKey }) as LanguageModel
     }
 
     case 'mistral': {
       if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-ignore dynamic import
-      const { mistral } = await import('@ai-sdk/mistral')
-      return mistral(modelName, { apiKey }) as LanguageModel
+      const { createMistral } = await import('@ai-sdk/mistral')
+      const mistral = createMistral({ apiKey })
+      return mistral(modelName) as LanguageModel
     }
 
     case 'ollama': {
-      // @ts-ignore dynamic import
       const { ollama } = await import('ai-sdk-ollama')
       // Ollama behaves differently if baseUrl is provided
       if (baseUrl) {
@@ -67,14 +66,14 @@ export async function createModel(config?: ModelConfig): Promise<LanguageModel> 
 
     case 'google': {
       if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-ignore dynamic import
+      // @ts-expect-error dynamic import
       const { google } = await import('@ai-sdk/google')
       return google(modelName, { apiKey }) as LanguageModel
     }
 
     case 'anthropic': {
       if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-ignore dynamic import
+      // @ts-expect-error dynamic import
       const { anthropic } = await import('@ai-sdk/anthropic')
       return anthropic(modelName, { apiKey }) as LanguageModel
     }
