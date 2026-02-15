@@ -243,6 +243,7 @@ transfer.onUploadFinish((upload, req, res) => {
   console.log('Upload finished:', upload.id)
 })
 ```
+
 ### AI Module (New)
 
 The AI module provides a standardized way to create AI models and agents, wrapping the Vercel AI SDK and Mastra.
@@ -277,10 +278,97 @@ await guard.run('openai', async () => {
 ```
 
 **Installation:**
+
 You must install the peer dependencies:
 
 ```bash
 npm install ai @mastra/core
 ```
 
-And the provider SDKs you need (e.g. `@ai-sdk/openai`).
+And the provider SDKs you need.
+
+_Example for OpenAI:_
+
+```bash
+npm install @ai-sdk/openai
+```
+
+_Example for Anthropic:_
+
+```bash
+npm install @ai-sdk/anthropic
+```
+
+_Example for Google (Gemini):_
+
+```bash
+npm install @ai-sdk/google
+```
+
+_Example for Ollama:_
+
+```bash
+npm install ai-sdk-ollama
+```
+
+### Advanced Model Examples
+
+#### 1. Anthropic (Claude 3.5 Sonnet)
+
+Configured via Environment Variables:
+
+```bash
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-3-5-sonnet-20240620
+```
+
+Or explicit configuration:
+
+```typescript
+const model = await createModel({
+  provider: 'anthropic',
+  apiKey: 'sk-ant-...',
+  model: 'claude-3-5-sonnet-20240620'
+})
+```
+
+#### 2. Google (Gemini 1.5 Pro)
+
+Configured via Environment Variables:
+
+```bash
+AI_PROVIDER=google
+GOOGLE_API_KEY=AIza...
+GOOGLE_MODEL=models/gemini-1.5-pro-latest
+```
+
+Or explicit configuration:
+
+```typescript
+const model = await createModel({
+  provider: 'google',
+  apiKey: 'AIza...',
+  model: 'models/gemini-1.5-pro-latest'
+})
+```
+
+#### 3. Ollama (Llama 3 Local)
+
+Configured via Environment Variables:
+
+```bash
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434/api
+OLLAMA_MODEL=llama3
+```
+
+Or explicit configuration:
+
+```typescript
+const model = await createModel({
+  provider: 'ollama',
+  baseUrl: 'http://localhost:11434/api',
+  model: 'llama3'
+})
+```
