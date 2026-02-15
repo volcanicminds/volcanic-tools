@@ -47,7 +47,9 @@ export async function createModel(config?: ModelConfig): Promise<LanguageModel> 
     case 'mistral': {
       if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
       const { createMistral } = await import('@ai-sdk/mistral')
+      console.log('DEBUG: createMistral factory loaded', !!createMistral)
       const mistral = createMistral({ apiKey })
+      console.log('DEBUG: mistral provider created', !!mistral)
       return mistral(modelName) as LanguageModel
     }
 
