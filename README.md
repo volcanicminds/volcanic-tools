@@ -243,3 +243,44 @@ transfer.onUploadFinish((upload, req, res) => {
   console.log('Upload finished:', upload.id)
 })
 ```
+### AI Module (New)
+
+The AI module provides a standardized way to create AI models and agents, wrapping the Vercel AI SDK and Mastra.
+
+**Features:**
+
+- **Unified Model Factory:** Create models with `createModel` supporting OpenAI, Mistral, Ollama, Anthropic, Google.
+- **Environment Variable Fallback:** Automatically uses `AI_PROVIDER`, `OPENAI_API_KEY`, etc. if no config is provided.
+- **Mastra Agent Wrapper:** `createAgent` simplifies Mastra agent creation with Volcanic configuration.
+- **Concurrency Guard:** Manage concurrent AI requests per provider to avoid rate limits.
+
+**Usage:**
+
+```typescript
+import { createModel, createAgent, ConcurrencyGuard } from '@volcanicminds/tools/ai'
+
+// 1. Create a Model (uses Env vars by default)
+const model = await createModel()
+
+// 2. Create an Agent
+const agent = await createAgent({
+  name: 'Auditor',
+  instructions: 'You are an auditor...',
+  model: model // or config object
+})
+
+// 3. Concurrency Control
+const guard = new ConcurrencyGuard()
+await guard.run('openai', async () => {
+  // critical section
+})
+```
+
+**Installation:**
+You must install the peer dependencies:
+
+```bash
+npm install ai @mastra/core
+```
+
+And the provider SDKs you need (e.g. `@ai-sdk/openai`).

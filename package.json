@@ -44,6 +44,11 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
+    "./ai": {
+      "types": "./dist/lib/ai/index.d.ts",
+      "import": "./dist/lib/ai/index.js",
+      "require": "./dist/lib/ai/index.js"
+    },
     "./mfa": {
       "types": "./dist/lib/mfa/index.d.ts",
       "import": "./dist/lib/mfa/index.js",
@@ -101,12 +106,35 @@
     "otpauth": "^9.4.1",
     "qrcode": "^1.5.4"
   },
+  "peerDependencies": {
+    "@mastra/core": ">=1.0.0",
+    "ai": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/openai": {
+      "optional": true
+    },
+    "@ai-sdk/mistral": {
+      "optional": true
+    },
+    "@ai-sdk/google": {
+      "optional": true
+    },
+    "@ai-sdk/anthropic": {
+      "optional": true
+    },
+    "ai-sdk-ollama": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@mastra/core": "^1.4.0",
     "@types/minio": "^7.1.1",
     "@types/node": "^25.0.3",
     "@types/nodemailer": "^7.0.4",
     "@types/qrcode": "^1.5.6",
+    "ai": "^6.0.86",
     "eslint": "^9.39.2",
     "globals": "^16.5.0",
     "tsx": "^4.21.0",
@@ -122,6 +150,9 @@
     "*": {
       "*": [
         "dist/index.d.ts"
+      ],
+      "ai": [
+        "dist/lib/ai/index.d.ts"
       ],
       "mfa": [
         "dist/lib/mfa/index.d.ts"
