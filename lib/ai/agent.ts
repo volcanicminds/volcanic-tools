@@ -20,6 +20,7 @@ export async function createAgent(config: AgentConfig): Promise<any> {
     id: config.name, // Use name as ID for simplicity
     name: config.name,
     instructions: config.instructions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     model: model as any,
     // Mastra tools type is generic Record<string, ToolAction<...>> but we use unknown here for flexibility
     // Consumers should ensure tools are valid Mastra tools
