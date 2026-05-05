@@ -36,8 +36,14 @@ export interface MailOptions {
   attachments?: MailAttachment[]
 }
 
+
+const BR_REGEX = /<br\s*\/?>/gi
+const P_REGEX = /<\/p>/gi
+const TAG_REGEX = /<[^>]*>?/gm
+
 /**
  * Mailer class wrapper around nodemailer.
+
  * Designed to be tree-shakeable and configuration-driven without relying on process.env directly.
  */
 export class Mailer {
@@ -69,9 +75,9 @@ export class Mailer {
   private stripHtml(html: string): string {
     if (!html) return ''
     return html
-      .replace(/<br\s*\/?>/gi, '\n') // Replace <br> with newlines
-      .replace(/<\/p>/gi, '\n\n') // Replace </p> with double newlines
-      .replace(/<[^>]*>?/gm, '') // Remove all other tags
+      .replace(BR_REGEX, '\n') // Replace <br> with newlines
+      .replace(P_REGEX, '\n\n') // Replace </p> with double newlines
+      .replace(TAG_REGEX, '') // Remove all other tags
       .trim()
   }
 
