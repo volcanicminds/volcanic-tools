@@ -1,0 +1,40 @@
+# @volcanicminds/tools - AI Agent Context
+
+## Project Purpose
+Tree-shakeable TypeScript ESM library providing modular utilities for the Volcanic Minds backend ecosystem.
+
+## Tech Stack
+- **Runtime:** Node.js >= 24.x
+- **Module System:** ESM (`"type": "module"`)
+- **Types:** TypeScript
+- **Dependencies:** `@aws-sdk/client-s3`, `@tus/server`, `minio`, `nodemailer`, `otpauth`, `qrcode`.
+- **Peer Dependencies:** `@mastra/core`, `ai` (and related provider SDKs).
+
+## Codebase Architecture
+- `lib/`: Source code directory.
+  - `ai/`: AI models and agents wrapper (`@mastra/core`, Vercel AI SDK).
+  - `mailer/`: `nodemailer` wrapper with automatic HTML-to-text conversion.
+  - `mfa/`: Multi-Factor Authentication utilities (TOTP, QR codes) using `otpauth`.
+  - `storage/`: S3/Minio client wrapper.
+  - `transfer/`: Resumable uploads via `tus.io` protocol.
+  - `util/`: Shared utilities (e.g., logger).
+- `dist/`: Compiled output (ignored in git).
+- `docs/`: Human-facing documentation (e.g., limits, architecture).
+
+## Core Paradigms & Constraints
+1.  **Tree-Shakeable:** Utilities must be independently importable (e.g., `import { Mailer } from '@volcanicminds/tools/mailer'`). Do not create tight coupling between independent modules.
+2.  **Configuration Injection:** Modules prefer configuration objects passed during initialization over direct dependency on `process.env`.
+3.  **Environment Variable Fallbacks:** The AI module explicitly supports falling back to standard environment variables (e.g., `AI_PROVIDER`, `OPENAI_API_KEY`) if explicit configuration is omitted.
+4.  **No `src/` directory:** All source code lives in `lib/`.
+5.  **ESM Only:** Use `.js` extensions in imports (e.g., `import { something } from './file.js'`) even in TypeScript files.
+
+## AI Module Patterns
+- Models are created dynamically to avoid loading unused SDKs.
+- `ConcurrencyGuard` must be used when managing concurrent requests to prevent provider rate-limiting.
+- Agents wrap Mastra's `Agent` class but resolve the model using the internal factory.
+
+## Testing & Checks
+- Linting: `npm run lint` (ESLint)
+- Type Checking: `npm run type-check`
+- Combined Check: `npm run check-all`
+- Build: `npm run build`

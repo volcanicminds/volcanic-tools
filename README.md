@@ -24,6 +24,11 @@ npm install @volcanicminds/tools
 npm run upgrade-deps
 ```
 
+## Documentation
+
+For detailed information about hardcoded limits, default configuration values (e.g., AI concurrency, chunk sizes, token window), and advanced setup, please refer to the [`docs/`](./docs) folder:
+- [Configuration & Limits](./docs/limits.md)
+
 ## Usage
 
 This package supports both root imports and sub-path imports to optimize bundle size and tree-shaking.
