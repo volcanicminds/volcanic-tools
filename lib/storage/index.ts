@@ -55,6 +55,21 @@ export class StorageManager {
     return this.bucket
   }
 
+  private validatePath(objectName: string): void {
+    if (!objectName || objectName.trim() === '') {
+      throw new Error('Object name cannot be empty')
+    }
+
+    if (
+      objectName.includes('..') ||
+      objectName.startsWith('/') ||
+      objectName.startsWith('./') ||
+      objectName.includes('\\')
+    ) {
+      throw new Error(`Invalid object name: ${objectName}`)
+    }
+  }
+
   public async verifyConnection(): Promise<boolean> {
     try {
       await this.client.listBuckets()
@@ -82,6 +97,7 @@ export class StorageManager {
     stream: Readable | Buffer | string,
     options: UploadOptions = {}
   ): Promise<UploadedObjectInfo> {
+    this.validatePath(objectName)
     await this.ensureBucket()
 
     const metaData = options.metadata || {}
@@ -98,22 +114,27 @@ export class StorageManager {
   }
 
   public async getFileUrl(objectName: string, expiry: number = 24 * 60 * 60): Promise<string> {
+    this.validatePath(objectName)
     return this.client.presignedGetObject(this.bucket, objectName, expiry)
   }
 
   public async getUploadUrl(objectName: string, expiry: number = 24 * 60 * 60): Promise<string> {
+    this.validatePath(objectName)
     return this.client.presignedPutObject(this.bucket, objectName, expiry)
   }
 
   public async deleteFile(objectName: string): Promise<void> {
+    this.validatePath(objectName)
     await this.client.removeObject(this.bucket, objectName)
   }
 
   public async deleteFiles(objectNames: string[]): Promise<void> {
+    objectNames.forEach((name) => this.validatePath(name))
     await this.client.removeObjects(this.bucket, objectNames)
   }
 
   public async fileExists(objectName: string): Promise<boolean> {
+    this.validatePath(objectName)
     try {
       await this.client.statObject(this.bucket, objectName)
       return true
@@ -126,10 +147,12 @@ export class StorageManager {
   }
 
   public async getFileStream(objectName: string): Promise<Readable> {
+    this.validatePath(objectName)
     return this.client.getObject(this.bucket, objectName)
   }
 
   public async getFileStat(objectName: string): Promise<BucketItemStat> {
+    this.validatePath(objectName)
     return this.client.statObject(this.bucket, objectName)
   }
 }
