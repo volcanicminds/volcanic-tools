@@ -54,14 +54,10 @@ export async function createModel(config?: ModelConfig): Promise<LanguageModel> 
     }
 
     case 'ollama': {
-      const { ollama } = await import('ai-sdk-ollama')
-      // Ollama behaves differently if baseUrl is provided
+      const { ollama, createOllama } = await import('ai-sdk-ollama')
       if (baseUrl) {
-        // Need to configure the provider if custom URL is used
-        // However, the standard `ollama(model)` call usually respects OLLAMA_BASE_URL env var if set
-        // Or we might need to instantiate a custom Ollama provider.
-        // For simplicity with the standard library wrapper:
-        process.env.OLLAMA_BASE_URL = baseUrl // Force env var for the library
+        const customOllama = createOllama({ baseURL: baseUrl })
+        return customOllama(modelName) as LanguageModel
       }
       return ollama(modelName) as LanguageModel
     }
