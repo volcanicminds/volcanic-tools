@@ -8,16 +8,27 @@ const DEFAULT_LIMITS: ConcurrencyConfig = {
   anthropic: 5,
 }
 
+export class ConcurrencyQueueError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ConcurrencyQueueError'
+  }
+}
+
 class Semaphore {
   private running = 0
   private queue: (() => void)[] = []
 
-  constructor(private max: number) {}
+  constructor(private max: number, private maxQueueSize: number = 100) {}
 
   async acquire(): Promise<void> {
     if (this.running < this.max) {
       this.running++
       return
+    }
+
+    if (this.queue.length >= this.maxQueueSize) {
+      throw new ConcurrencyQueueError(`Queue size limit of ${this.maxQueueSize} reached`)
     }
 
     return new Promise<void>((resolve) => {
