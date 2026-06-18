@@ -1,6 +1,8 @@
 import { expect } from 'expect'
 import { generateSecret, generateSetupDetails, verifyToken, generateToken } from '../../lib/mfa/index.js'
 
+const isBase32 = (s: string) => /^[A-Z2-7]+$/.test(s)
+
 describe('MFA (TOTP)', () => {
   it('generates a base32 secret', () => {
     const secret = generateSecret()
@@ -30,5 +32,26 @@ describe('MFA (TOTP)', () => {
   it('rejects empty inputs', () => {
     expect(verifyToken('', 'JBSWY3DPEHPK3PXP')).toBe(false)
     expect(verifyToken('123456', '')).toBe(false)
+  })
+
+  it('honors a custom secret size', () => {
+    const small = generateSecret(10)
+    const large = generateSecret(32)
+    expect(isBase32(small)).toBe(true)
+    expect(isBase32(large)).toBe(true)
+    expect(large.length).toBeGreaterThan(small.length)
+  })
+
+  it('reuses a provided secret in the setup details (round-trip)', async () => {
+    const secret = generateSecret()
+    const details = await generateSetupDetails('VolcanicApp', 'user@example.com', secret)
+    expect(details.secret).toBe(secret)
+    expect(details.uri).toContain('VolcanicApp')
+  })
+
+  it('verifies a token within the allowed time window', () => {
+    const secret = generateSecret()
+    const token = generateToken(secret)
+    expect(verifyToken(token, secret, 2)).toBe(true)
   })
 })
