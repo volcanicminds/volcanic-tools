@@ -51,14 +51,19 @@ export async function generateSetupDetails(
 }
 
 /**
- * Validates a TOTP token against a secret.
+ * Validates a TOTP token against a secret and returns the time-step delta.
+ *
+ * The delta is the integer offset (in periods) between the matched time step and the current one
+ * (e.g. 0 = current window, -1 = previous, 1 = next). Callers can use it for anti-replay protection
+ * by recording the absolute step consumed and rejecting any token at the same or an earlier step.
+ *
  * @param token The token to verify.
  * @param secret The base32 secret.
  * @param window The acceptable time window (default 1, meaning +/- 30 seconds).
- * @returns True if valid, false otherwise.
+ * @returns The delta (integer) if valid, or `null` if invalid.
  */
-export function verifyToken(token: string, secret: string, window: number = 1): boolean {
-  if (!token || !secret) return false
+export function verifyTokenDelta(token: string, secret: string, window: number = 1): number | null {
+  if (!token || !secret) return null
 
   const totp = new OTPAuth.TOTP({
     algorithm: 'SHA1',
@@ -68,8 +73,18 @@ export function verifyToken(token: string, secret: string, window: number = 1): 
   })
 
   // validate returns null if invalid, or the delta (integer) if valid
-  const delta = totp.validate({ token, window })
-  return delta !== null
+  return totp.validate({ token, window })
+}
+
+/**
+ * Validates a TOTP token against a secret.
+ * @param token The token to verify.
+ * @param secret The base32 secret.
+ * @param window The acceptable time window (default 1, meaning +/- 30 seconds).
+ * @returns True if valid, false otherwise.
+ */
+export function verifyToken(token: string, secret: string, window: number = 1): boolean {
+  return verifyTokenDelta(token, secret, window) !== null
 }
 
 /**

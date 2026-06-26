@@ -1,5 +1,11 @@
 import { expect } from 'expect'
-import { generateSecret, generateSetupDetails, verifyToken, generateToken } from '../../lib/mfa/index.js'
+import {
+  generateSecret,
+  generateSetupDetails,
+  verifyToken,
+  verifyTokenDelta,
+  generateToken
+} from '../../lib/mfa/index.js'
 
 const isBase32 = (s: string) => /^[A-Z2-7]+$/.test(s)
 
@@ -53,5 +59,20 @@ describe('MFA (TOTP)', () => {
     const secret = generateSecret()
     const token = generateToken(secret)
     expect(verifyToken(token, secret, 2)).toBe(true)
+  })
+
+  it('returns the delta for a valid token (anti-replay support)', () => {
+    const secret = generateSecret()
+    const token = generateToken(secret)
+    const delta = verifyTokenDelta(token, secret)
+    expect(typeof delta).toBe('number')
+    expect(delta).toBe(0) // freshly generated token matches the current time step
+  })
+
+  it('returns null delta for an invalid or empty token', () => {
+    const secret = generateSecret()
+    expect(verifyTokenDelta('000000', secret)).toBeNull()
+    expect(verifyTokenDelta('', secret)).toBeNull()
+    expect(verifyTokenDelta('123456', '')).toBeNull()
   })
 })
