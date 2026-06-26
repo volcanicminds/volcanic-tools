@@ -1,0 +1,5 @@
+{
+  "url": "https://context7.com/volcanicminds/volcanic-tools",
+  "public_key": "pk_MSCtFRLqqJKtR6gHZ4U7E",
+  "description": "Tree-shakeable utility toolkit for Node.js (ESM): MFA/TOTP, mailer, logger, storage, transfer, and AI helpers. Standalone, but integrates seamlessly with @volcanicminds/backend."
+}
