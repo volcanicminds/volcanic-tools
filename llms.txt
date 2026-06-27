@@ -31,7 +31,18 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 ## AI Module Patterns
 - Models are created dynamically to avoid loading unused SDKs.
 - `ConcurrencyGuard` must be used when managing concurrent requests to prevent provider rate-limiting.
-- Agents wrap Mastra's `Agent` class but resolve the model using the internal factory.
+- Agents wrap Mastra's `Agent` class but resolve the model using the internal factory. `@mastra/core` is imported
+  dynamically, so the rest of the `ai` module (models, embeddings, vector store) works without Mastra installed.
+
+## Embeddings & Vector Search
+- `createEmbedder` / `embedText` / `embedTexts`: produce vectors. Provider/model resolved from config or env
+  (`AI_EMBEDDING_PROVIDER` → falls back to `AI_PROVIDER`; model from e.g. `OPENAI_EMBEDDING_MODEL`). Anthropic has
+  no embeddings API. Provider SDKs loaded via dynamic `import()`.
+- `PgVectorStore`: engine-agnostic pgvector helper. Constructed with a pg-compatible `query` executor (TypeORM
+  `dataSource.query`, an embedded PGlite instance, or a node-postgres pool) plus `table`, `dimensions`, `distance`
+  (`cosine`|`l2`|`ip`), and optional `schema` for multi-tenant isolation. Methods: `init`, `upsert`, `upsertMany`,
+  `search`, `delete`, `count`. Same code runs on real Postgres (with pgvector) and embedded PGlite (`vector: true`
+  via `@volcanicminds/backend`). Results normalize TypeORM (array) vs pg/PGlite (`{ rows }`) shapes.
 
 ## Testing & Checks
 - Linting: `npm run lint` (ESLint)

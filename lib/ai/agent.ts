@@ -1,4 +1,3 @@
-import { Agent } from '@mastra/core/agent'
 import type { LanguageModel } from 'ai'
 import type { AgentConfig, ModelConfig } from './types.js'
 import { createModel } from './model.js'
@@ -10,9 +9,14 @@ function isModelConfig(model: LanguageModel | ModelConfig): model is ModelConfig
 /**
  * Creates a Mastra Agent with Volcanic configuration patterns.
  * Automatically resolves the model from config or environment.
+ *
+ * `@mastra/core` is imported dynamically so the rest of the `ai` module
+ * (createModel, embeddings, vector store) stays usable without installing Mastra.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createAgent(config: AgentConfig): Promise<any> {
+  const { Agent } = await import('@mastra/core/agent')
+
   // Resolve the model: if it's a ModelConfig -> createModel(), otherwise use it directly
   const model = isModelConfig(config.model) ? await createModel(config.model) : config.model
 

@@ -41,6 +41,7 @@ import { Mailer } from '@volcanicminds/tools/mailer'
 import * as logger from '@volcanicminds/tools/logger'
 import { StorageManager } from '@volcanicminds/tools/storage'
 import { TransferManager } from '@volcanicminds/tools/transfer'
+import { createEmbedder, embedText, PgVectorStore } from '@volcanicminds/tools/ai'
 ```
 
 ---
@@ -259,6 +260,8 @@ The AI module provides a standardized way to create AI models and agents, wrappi
 - **Environment Variable Fallback:** Automatically uses `AI_PROVIDER`, `OPENAI_API_KEY`, etc. if no config is provided.
 - **Mastra Agent Wrapper:** `createAgent` simplifies Mastra agent creation with Volcanic configuration.
 - **Concurrency Guard:** Manage concurrent AI requests per provider to avoid rate limits.
+- **Embeddings:** `createEmbedder` / `embedText` / `embedTexts` produce vectors (OpenAI, Mistral, Google, Ollama), parametrizable via config or env.
+- **Vector store:** `PgVectorStore`, an engine‑agnostic pgvector helper that runs identically on real Postgres and embedded PGlite.
 
 **Usage:**
 
@@ -315,6 +318,41 @@ _Example for Ollama:_
 ```bash
 npm install ai-sdk-ollama
 ```
+
+### Embeddings & Vector Search (pgvector)
+
+Generate embeddings and run similarity search. The vector store is **engine‑agnostic**: give it any pg‑compatible
+`query` executor — a TypeORM `dataSource.query`, an embedded PGlite instance, or a node‑postgres pool — and the
+same code runs on a real Postgres (with `pgvector` installed) and on PGlite (with `vector: true`). Everything is
+parametrizable via config: provider/model for embeddings, table name, vector `dimensions`, and `distance`
+(`cosine` | `l2` | `ip`).
+
+```typescript
+import { createEmbedder, embedText, PgVectorStore } from '@volcanicminds/tools/ai'
+
+// 1. Embeddings — provider/model resolved from config or env
+//    (AI_EMBEDDING_PROVIDER falls back to AI_PROVIDER; e.g. OPENAI_EMBEDDING_MODEL).
+const vector = await embedText('hello world')               // number[]
+// const embedder = await createEmbedder({ provider: 'openai', model: 'text-embedding-3-small' })
+
+// 2. Vector store — works on Postgres or embedded PGlite unchanged
+const store = new PgVectorStore({
+  query: (sql, params) => dataSource.query(sql, params),     // any pg-compatible executor
+  table: 'documents',
+  dimensions: 1536,                                          // match your embedding model
+  distance: 'cosine',
+  // schema: 'tenant_a'                                      // optional, for multi-tenant isolation
+})
+
+await store.init()                                          // CREATE EXTENSION vector + table (idempotent)
+await store.upsert('doc-1', 'the text', vector, { source: 'docs' })
+const matches = await store.search(await embedText('a query'), 5)
+//   -> [{ id, content, metadata, distance }, ...] nearest first
+```
+
+**Installation:** the store itself needs only your DB executor. For embeddings install `ai` + a provider SDK
+(see below). To back it with embedded PGlite use the backend's `type: 'pglite'` engine (`vector: true`) — see
+[`@volcanicminds/backend` docs/PGLITE.md](../volcanic-backend/docs/PGLITE.md).
 
 ### Advanced Model Examples
 
