@@ -2,7 +2,8 @@
 
 > Pacchetto npm `@volcanicminds/tools` (v0.1.x). Libreria di utility **tree-shakeable** per
 > l'ecosistema Volcanic Minds (vedi mappa nel CLAUDE.md di `volcanic-backend`). È il pacchetto
-> **più giovane e meno maturo** dei tre: nessun test, nessuna CI, API ancora in `0.x`.
+> **più giovane e meno maturo** dei tre: nessuna CI, API ancora in `0.x`, e una rete di prove
+> parziale (9 spec, nessuna copertura misurata).
 
 ## Stack & convenzioni
 
@@ -16,8 +17,19 @@ npm run build        # tsc -> dist/
 npm run type-check   # tsc --noEmit
 npm run lint         # eslint .  (lint:fix)
 npm run check-all    # lint + type-check  <-- prima di committare
-# NB: NESSUN `npm test`. Nessuna CI. Affidarsi a check-all + verifica manuale.
+npm test             # mocha su test/unit/*.spec.ts (9 file)
+# NB: nessuna CI: nessuno lancia `npm test` se non lo si lancia a mano.
 ```
+
+**Cosa le prove non toccano**, verificato il 18 settembre 2026: nessuno spec importa
+`lib/ai/index.ts`, `lib/ai/agent.ts` e `lib/ai/types.ts` (l'ultimo contiene solo tipi). Le nove
+batterie coprono mfa, mailer, embeddings, model, vector-store, concurrency e, dal 18 settembre,
+storage, transfer e logger: i due moduli che toccano dati altrui erano anche i due senza rete, e
+la prova su transfer ha trovato subito un difetto (l'evento `POST_CREATE` consegnava l'URL al
+posto dell'upload). `lib/main.ts` era uno stub senza uso ed è stato rimosso. Se un giorno
+si misura la copertura, va misurata con il backend monocart di `c8` per lo stesso motivo scritto
+in `volcanic-backend/COVERAGE.md`: sotto `tsx` c8 semplice legge male un modulo compilato due
+volte.
 
 ## Moduli & subpath (export in `package.json`)
 

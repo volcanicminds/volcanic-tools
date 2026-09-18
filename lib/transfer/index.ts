@@ -103,9 +103,13 @@ export class TransferManager {
 
   // Hook system wrappers with double casting (as unknown) to bypass TS structural check
 
+  // POST_CREATE is emitted as (req, upload, url), with no response: one argument fewer than the
+  // other two hooks, and in a different order. Read as (req, res, upload) it handed the consumer
+  // the URL string where the Upload belongs, which no type could catch downstream because the
+  // callback takes `Upload | string` for the sake of POST_TERMINATE.
   public onUploadCreate(callback: TransferEventCallback): void {
-    this.server.on(EVENTS.POST_CREATE, (req, res, upload) => {
-      callback(upload, req as unknown as IncomingMessage, res as unknown as ServerResponse)
+    this.server.on(EVENTS.POST_CREATE, (req, upload) => {
+      callback(upload, req as unknown as IncomingMessage)
     })
   }
 
