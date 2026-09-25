@@ -18,7 +18,7 @@ npm run type-check   # tsc --noEmit
 npm run lint         # eslint .  (lint:fix)
 npm run check-all    # lint + type-check  <-- prima di committare
 npm test             # mocha su test/unit/*.spec.ts (9 file)
-# NB: nessuna CI: nessuno lancia `npm test` se non lo si lancia a mano.
+# NB: nessuna CI: `npm test` lo lanciano solo la mano e `prepublishOnly` (check-all, test, build).
 ```
 
 **Cosa le prove non toccano**, verificato il 18 settembre 2026: nessuno spec importa

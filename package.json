@@ -95,6 +95,7 @@
     "type-check": "tsc --noEmit",
     "check-all": "npm run lint && npm run type-check",
     "test": "mocha --import=tsx ./test/**/*.spec.ts -t 20000 --exit",
+    "prepublishOnly": "npm run check-all && npm test && npm run build",
     "combine": "node combine.js"
   },
   "dependencies": {
