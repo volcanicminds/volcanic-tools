@@ -13,8 +13,6 @@ npm publish --access public
 
 ## local linking
 
-## local linking
-
 ```ruby
 npm link
 npm link "@volcanicminds/tools"
