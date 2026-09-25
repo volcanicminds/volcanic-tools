@@ -1,6 +1,6 @@
 # CLAUDE.md — @volcanicminds/tools
 
-> Pacchetto npm `@volcanicminds/tools` (v0.1.x). Libreria di utility **tree-shakeable** per
+> Pacchetto npm `@volcanicminds/tools` (v0.2.x). Libreria di utility **tree-shakeable** per
 > l'ecosistema Volcanic Minds (vedi mappa nel CLAUDE.md di `volcanic-backend`). È il pacchetto
 > **più giovane e meno maturo** dei tre: nessuna CI, API ancora in `0.x`, e una rete di prove
 > parziale (9 spec, nessuna copertura misurata).
