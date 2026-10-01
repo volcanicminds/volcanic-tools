@@ -15,7 +15,7 @@ npm install @volcanicminds/tools
 
 ## Requirements
 
-- Node.js >= 24.x
+- Node.js >= 26.x
 - ESM project (`"type": "module"`)
 
 ## How to upgrade packages

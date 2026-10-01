@@ -7,7 +7,7 @@
 
 ## Stack & convenzioni
 
-- **Node >= 24**, **ESM puro** (`NodeNext`), import con estensione `.js`. Sorgente in `lib/`, entry `index.ts`, build `tsc` → `dist/`.
+- **Node >= 26**, **ESM puro** (`NodeNext`), import con estensione `.js`. Sorgente in `lib/`, entry `index.ts`, build `tsc` → `dist/`.
 - **Tree-shaking via subpath exports** — è il vincolo architetturale n.1: ogni modulo è importabile in isolamento e **non deve accoppiarsi** agli altri.
 
 ## Comandi
