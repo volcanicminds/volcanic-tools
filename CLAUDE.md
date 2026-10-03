@@ -2,7 +2,7 @@
 
 > Pacchetto npm `@volcanicminds/tools` (v0.2.x). Libreria di utility **tree-shakeable** per
 > l'ecosistema Volcanic Minds (vedi mappa nel CLAUDE.md di `volcanic-backend`). È il pacchetto
-> **più giovane e meno maturo** dei tre: API ancora in `0.x` e una rete di prove parziale (12 spec,
+> **più giovane e meno maturo** dei tre: API ancora in `0.x` e una rete di prove parziale (13 spec,
 > nessuna copertura misurata).
 
 ## Stack & convenzioni
@@ -17,7 +17,7 @@ npm run build        # tsc -> dist/
 npm run type-check   # tsc --noEmit
 npm run lint         # eslint .  (lint:fix)
 npm run check-all    # lint + type-check  <-- prima di committare
-npm test             # mocha su test/unit/*.spec.ts (12 file)
+npm test             # mocha su test/unit/*.spec.ts (13 file)
 ```
 
 **CI** (`.github/workflows/`), su push a `main`, `develop` e `v5` e su ogni pull request: `ci.yml`
@@ -26,8 +26,8 @@ fa `npm ci`, lint, type-check, `npm audit --omit=dev --audit-level=high`, test, 
 
 **Cosa le prove non toccano**, verificato il 3 ottobre 2026: nessuno spec importa
 `lib/ai/index.ts` (lo carica solo la fixture della telemetria, in un processo a parte) né
-`lib/ai/types.ts`, che contiene solo tipi. Le dodici batterie coprono mfa, mailer, embeddings, model,
-provider, agent, la telemetria AI, vector-store, concurrency, storage, transfer e logger: i due moduli che toccano dati altrui erano anche i due senza rete, e
+`lib/ai/types.ts`, che contiene solo tipi. Le tredici batterie coprono mfa, mailer, embeddings, model,
+provider, agent, la telemetria AI, i tool con MCP, vector-store, concurrency, storage, transfer e logger: i due moduli che toccano dati altrui erano anche i due senza rete, e
 la prova su transfer ha trovato subito un difetto (l'evento `POST_CREATE` consegnava l'URL al
 posto dell'upload). `lib/main.ts` era uno stub senza uso ed è stato rimosso. Se un giorno
 si misura la copertura, va misurata con il backend monocart di `c8` per lo stesso motivo scritto
@@ -43,7 +43,8 @@ volte.
 | `@volcanicminds/tools/logger` | `lib/util/logger` | Wrapper Pino (usa `global.log` se presente) | — |
 | `@volcanicminds/tools/storage` | `lib/storage` | Client S3/Minio (upload, presigned URL) | `minio`, `@aws-sdk/client-s3` |
 | `@volcanicminds/tools/transfer` | `lib/transfer` | Upload resumable TUS.io (local/s3) | `@tus/server`, `@tus/file-store`, `@tus/s3-store` |
-| `@volcanicminds/tools/ai` | `lib/ai` | Factory model/agent multi-provider | **peer** opzionali `ai` 7, provider, `@ai-sdk/otel` |
+| `@volcanicminds/tools/ai` | `lib/ai` | Factory model/agent multi-provider, `defineTool` | **peer** opzionali `ai` 7, provider, `@ai-sdk/otel` |
+| `@volcanicminds/tools/mcp` | `lib/mcp` | Server MCP stateless sui tool di `defineTool` | **peer** opzionale `@modelcontextprotocol/server` 2 |
 
 ## Modulo AI (il più nuovo, attenzione)
 
@@ -52,7 +53,8 @@ Cablaggio dell'**AI SDK 7**. API: `createModel(config?)`, `createAgent(config)` 
 - **Fallback da env**: `AI_PROVIDER` + `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/`GOOGLE_API_KEY`/`OLLAMA_BASE_URL` + `*_MODEL`.
 - **ConcurrencyGuard** obbligatorio per limitare richieste concorrenti per provider (limiti default: openai 5, mistral 10, google 10, anthropic 5, ollama 2 — vedi `docs/limits.md`).
 - **Telemetria** (`lib/ai/telemetry.ts`): la prima chiamata del modulo registra l'integrazione OpenTelemetry dell'AI SDK, una volta per processo, se `@ai-sdk/otel` è installato (peer opzionale) e `AI_TELEMETRY` non è `false`; se l'applicazione ne ha già registrata una, non ne aggiunge un'altra. Il contenuto (prompt, risposte, argomenti dei tool, testi da vettorizzare) resta fuori dalle span salvo `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`; vince l'impostazione della singola chiamata. Il default lo applica un proxy sull'integrazione, quindi vale anche per le chiamate dirette all'SDK.
-- File: `lib/ai/provider.ts`, `lib/ai/model.ts`, `lib/ai/agent.ts`, `lib/ai/embeddings.ts`, `lib/ai/telemetry.ts`, `lib/ai/concurrency.ts`, `lib/ai/types.ts`.
+- **Tool** (`lib/ai/tool.ts`, contratto senza import a runtime; `lib/ai/tool-set.ts` per l'AI SDK; `lib/mcp/index.ts` per MCP): un tool definito una volta con `defineTool`, servito da `toAiTools` e da `createMcpHandler` con lo stesso risultato e lo stesso errore, perché passano entrambi da `runTool` e `bindCaller`. Lo schema d'ingresso è Standard Schema più Standard JSON Schema: Zod 4.2 o successivo, non Zod 3; `zod` resta devDependency, lo porta il consumer. Il chiamante va per chiamata (`toolsContext` nell'AI SDK, `AsyncLocalStorage` in MCP), mai sul tool set. `ToolError` si riconosce da un brand `Symbol.for`, non da `instanceof`, perché un'app può caricare due copie del pacchetto. Il backend non sa niente di MCP (F73).
+- File: `lib/ai/provider.ts`, `lib/ai/model.ts`, `lib/ai/agent.ts`, `lib/ai/embeddings.ts`, `lib/ai/telemetry.ts`, `lib/ai/concurrency.ts`, `lib/ai/tool.ts`, `lib/ai/tool-set.ts`, `lib/ai/types.ts`, `lib/mcp/index.ts`.
 - La registrazione è per processo e non si azzera: i suoi test lanciano ogni scenario in un processo nuovo (`test/fixtures/ai-telemetry.ts`), con le span raccolte in memoria.
 - Sotto mocha gli spec si caricano con `require()`: con tsx gli import statici di `ai` nello spec sono una copia CommonJS, diversa dall'`import()` dinamico della lib. Per confronti di identità (`instanceof`) nei test, prendere la classe con `await import('ai')`.
 

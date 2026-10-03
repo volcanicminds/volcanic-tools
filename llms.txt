@@ -7,13 +7,16 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 - **Runtime:** Node.js >= 26.x
 - **Module System:** ESM (`"type": "module"`)
 - **Types:** TypeScript
-- **Dependencies:** `@aws-sdk/client-s3`, `@tus/server`, `minio`, `nodemailer`, `otpauth`, `qrcode`.
+- **Dependencies:** `@aws-sdk/client-s3`, `@tus/server`, `minio`, `nodemailer`, `otpauth`, `qrcode`,
+  `@standard-schema/spec` (types only).
 - **Peer Dependencies (optional):** `ai` 7, the provider SDKs 4 (`@ai-sdk/*`, `ai-sdk-ollama`) and `@ai-sdk/otel`
-  1, only for `ai/`.
+  1, only for `ai/`; `@modelcontextprotocol/server` 2, only for `mcp/`.
 
 ## Codebase Architecture
 - `lib/`: Source code directory.
-  - `ai/`: AI SDK wiring: models, agents (`ToolLoopAgent`), embeddings, pgvector store.
+  - `ai/`: AI SDK wiring: models, agents (`ToolLoopAgent`), the tool contract (`defineTool`), embeddings, pgvector
+    store.
+  - `mcp/`: an MCP server over Streamable HTTP for the tools of `defineTool`, mounted by the application.
   - `mailer/`: `nodemailer` wrapper with automatic HTML-to-text conversion.
   - `mfa/`: Multi-Factor Authentication utilities (TOTP, QR codes) using `otpauth`.
   - `storage/`: S3/Minio client wrapper.
@@ -42,6 +45,23 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
   application registered one already. Content (prompts, responses, tool arguments, embedded texts) stays out of the
   spans unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`; a call's own `recordInputs` or
   `recordOutputs` wins. The registry is process-wide, so the default covers direct AI SDK calls too.
+
+## Tools and MCP
+- `defineTool({ name, description, input, execute })` (`lib/ai/tool.ts`, exported by `ai/` and `mcp/`) defines a
+  tool once for both adapters. `input` is a schema that is Standard Schema and Standard JSON Schema at once (Zod 4.2
+  or later; not Zod 3). `execute(input, { call })` reaches the application only through `call`, the API bound to
+  the end user's credential: a path, never a URL; a 2xx resolves with the body, anything else throws a
+  `ToolCallError` whose message carries the API `code`.
+- Errors: a `ToolError` (and `ToolCallError`) message reaches the model or the MCP client as it is; any other error
+  becomes "Tool '<name>' failed", with the original as `cause` (and passed to `onError` in MCP).
+- `toAiTools(definitions)` builds an AI SDK tool set once; each `generateText` or `streamText` call passes the
+  caller as `toolsContext: callerContext(definitions, caller)`. A call without it does not compile, and at runtime
+  runs no tool: the SDK validates the context.
+- `createMcpHandler({ name, version, tools, onError })` (`lib/mcp`) returns a web-standard
+  `{ fetch(request, { caller, parsedBody }), close }`, stateless, built on `createMcpHandler` of
+  `@modelcontextprotocol/server`. The application mounts it on its own authenticated route and passes the caller of
+  each request; the caller reaches the tools through `AsyncLocalStorage`. `@volcanicminds/backend` knows nothing about
+  MCP.
 
 ## Embeddings & Vector Search
 - `createEmbedder` / `embedText` / `embedTexts`: produce vectors. Provider/model resolved from config or env

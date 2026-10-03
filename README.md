@@ -263,6 +263,8 @@ agents that are the SDK's own `ToolLoopAgent`.
 - **Agents:** `createAgent` returns the AI SDK's `ToolLoopAgent` as it is. The model may be a config; the agent's
   `name` becomes its `id` and the `functionId` of its telemetry, so its spans are grouped by agent. Every other
   setting (`instructions`, `tools`, `stopWhen`, `prepareCall`, `telemetry`) is the SDK's.
+- **Tools:** `defineTool` defines a tool once, for the AI SDK (`toAiTools`) and for an MCP server
+  (`@volcanicminds/tools/mcp`), acting as the person using it (see below).
 - **Telemetry:** with `@ai-sdk/otel` installed, AI calls are traced over OpenTelemetry, without their content
   unless asked for (see below).
 - **Concurrency Guard:** Manage concurrent AI requests per provider to avoid rate limits.
@@ -370,6 +372,69 @@ Things to know:
   and the content default above no longer applies: the SDK's does, which records it.
 - `@ai-sdk/otel` pins `ai` to its own exact version: with another `ai` 7 release the application gets a second
   copy of `ai` in `node_modules`. It works, because the registry lives on `globalThis`, but it weighs.
+
+### Tools for agents and MCP
+
+A tool is defined once with `defineTool` and served by two adapters: `toAiTools` builds an AI SDK tool set,
+`createMcpHandler` (subpath `@volcanicminds/tools/mcp`) an MCP server for an external assistant. A tool
+reaches the application only through `call`, its API with the credential of the person using the tool, so it sees
+what that person would see. The application writes the caller per request:
+
+```typescript
+import { generateText } from 'ai'
+import { z } from 'zod'
+import { defineTool, toAiTools, callerContext, type ApiCaller } from '@volcanicminds/tools/ai'
+
+const listVehicles = defineTool({
+  name: 'list_vehicles',
+  description: 'Vehicles on sale, newest first',
+  input: z.object({ brand: z.string().optional() }),
+  execute: (input, { call }) => call({ method: 'GET', path: '/vehicles', query: input.brand ? { brand: input.brand } : {} })
+})
+const tools = [listVehicles] as const
+const aiTools = toAiTools(tools) // once, at startup: the tool set holds no identity
+
+// Per request: the API as the person behind it, here through Fastify's inject with their own cookie.
+const caller: ApiCaller = async ({ method, path, query, body }) => {
+  const response = await server.inject({ method, url: path, query, payload: body as object | undefined, headers: { cookie: req.headers.cookie } })
+  return { status: response.statusCode, body: response.body ? response.json() : null }
+}
+const { text } = await generateText({ model, tools: aiTools, toolsContext: callerContext(tools, caller), prompt })
+```
+
+A call without `toolsContext` does not compile; if it runs anyway, it throws an `AI_TypeValidationError` ("No
+caller") before any tool runs, because the AI SDK validates the context of every tool.
+
+The same tools over MCP, mounted by the application on one of its own authenticated routes:
+
+```typescript
+import { createMcpHandler } from '@volcanicminds/tools/mcp'
+
+const mcp = await createMcpHandler({ name: 'sales', version: '1.0.0', tools, onError: (error, tool) => log.error({ error, tool }) })
+
+// In the route, per request: a web-standard Request in, a Response out.
+const response = await mcp.fetch(request, { caller, parsedBody: req.body })
+```
+
+Things to know:
+
+- The input schema must be Standard Schema and Standard JSON Schema at once, which both SDKs take as it is. Zod
+  4.2 or later is; Zod 3 is not. This package does not install `zod`: the application brings it.
+- `call` takes an API path, never a URL; a path that names another host (`//host`, `/\host`) is refused before the
+  API is called. A 2xx resolves with the body; anything else throws a `ToolCallError` whose message carries the
+  API's `code` (`STEP_UP_REQUIRED: Recent authentication required`).
+- Errors: the message of a `ToolError` (and `ToolCallError`) reaches the model or the MCP client as it is. Any
+  other error becomes "Tool '<name>' failed", so no internal detail leaks; the original is the error's `cause` for
+  the AI SDK and goes to `onError` for MCP.
+- The MCP server is stateless Streamable HTTP, built on `createMcpHandler` of `@modelcontextprotocol/server` 2: a
+  server per request, with the caller carried to the tools through `AsyncLocalStorage`. It checks no credential:
+  the route that mounts it authenticates the request and builds the caller.
+- `./mcp` re-exports `defineTool` and the errors, so an MCP server alone does not need `ai`.
+  `@volcanicminds/backend` knows nothing about MCP.
+
+```bash
+npm install @modelcontextprotocol/server zod
+```
 
 ### Embeddings & Vector Search (pgvector)
 
