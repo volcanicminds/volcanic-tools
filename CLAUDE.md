@@ -2,8 +2,8 @@
 
 > Pacchetto npm `@volcanicminds/tools` (v0.2.x). Libreria di utility **tree-shakeable** per
 > l'ecosistema Volcanic Minds (vedi mappa nel CLAUDE.md di `volcanic-backend`). È il pacchetto
-> **più giovane e meno maturo** dei tre: nessuna CI, API ancora in `0.x`, e una rete di prove
-> parziale (12 spec, nessuna copertura misurata).
+> **più giovane e meno maturo** dei tre: API ancora in `0.x` e una rete di prove parziale (12 spec,
+> nessuna copertura misurata).
 
 ## Stack & convenzioni
 
@@ -18,8 +18,11 @@ npm run type-check   # tsc --noEmit
 npm run lint         # eslint .  (lint:fix)
 npm run check-all    # lint + type-check  <-- prima di committare
 npm test             # mocha su test/unit/*.spec.ts (12 file)
-# NB: nessuna CI: `npm test` lo lanciano solo la mano e `prepublishOnly` (check-all, test, build).
 ```
+
+**CI** (`.github/workflows/`), su push a `main`, `develop` e `v5` e su ogni pull request: `ci.yml`
+fa `npm ci`, lint, type-check, `npm audit --omit=dev --audit-level=high`, test, build e `publint`;
+`codeql.yml` gira anche ogni lunedì. `prepublishOnly` ripete check-all, test e build.
 
 **Cosa le prove non toccano**, verificato il 3 ottobre 2026: nessuno spec importa
 `lib/ai/index.ts` (lo carica solo la fixture della telemetria, in un processo a parte) né
