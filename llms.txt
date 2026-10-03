@@ -8,11 +8,11 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 - **Module System:** ESM (`"type": "module"`)
 - **Types:** TypeScript
 - **Dependencies:** `@aws-sdk/client-s3`, `@tus/server`, `minio`, `nodemailer`, `otpauth`, `qrcode`.
-- **Peer Dependencies:** `@mastra/core`, `ai` (and related provider SDKs).
+- **Peer Dependencies (optional):** `ai` 7 and the provider SDKs 4 (`@ai-sdk/*`, `ai-sdk-ollama`), only for `ai/`.
 
 ## Codebase Architecture
 - `lib/`: Source code directory.
-  - `ai/`: AI models and agents wrapper (`@mastra/core`, Vercel AI SDK).
+  - `ai/`: AI SDK wiring: models, agents (`ToolLoopAgent`), embeddings, pgvector store.
   - `mailer/`: `nodemailer` wrapper with automatic HTML-to-text conversion.
   - `mfa/`: Multi-Factor Authentication utilities (TOTP, QR codes) using `otpauth`.
   - `storage/`: S3/Minio client wrapper.
@@ -29,10 +29,13 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 5.  **ESM Only:** Use `.js` extensions in imports (e.g., `import { something } from './file.js'`) even in TypeScript files.
 
 ## AI Module Patterns
-- Models are created dynamically to avoid loading unused SDKs.
+- Models are created dynamically to avoid loading unused SDKs. One factory (`lib/ai/provider.ts`) builds the
+  provider for chat and embedding models alike, always through the SDK's `create*` function: the default instances
+  read their own environment variable and ignore a configured key.
 - `ConcurrencyGuard` must be used when managing concurrent requests to prevent provider rate-limiting.
-- Agents wrap Mastra's `Agent` class but resolve the model using the internal factory. `@mastra/core` is imported
-  dynamically, so the rest of the `ai` module (models, embeddings, vector store) works without Mastra installed.
+- `createAgent` returns the AI SDK's `ToolLoopAgent` as it is, with no type of its own: the model may be a config
+  (resolved by `createModel`), `name` becomes the agent's `id` and its telemetry `functionId`, every other setting is
+  the SDK's (`AgentConfig` is `ToolLoopAgentSettings` minus `id` and `model`).
 
 ## Embeddings & Vector Search
 - `createEmbedder` / `embedText` / `embedTexts`: produce vectors. Provider/model resolved from config or env

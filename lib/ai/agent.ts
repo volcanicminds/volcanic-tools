@@ -1,34 +1,29 @@
-import type { LanguageModel } from 'ai'
-import type { AgentConfig, ModelConfig } from './types.js'
+import type { LanguageModel, ToolLoopAgent, ToolLoopAgentSettings, ToolSet } from 'ai'
+import type { AgentConfig, ModelConfig, NoTools } from './types.js'
 import { createModel } from './model.js'
 
+// A model has a `provider` too (`openai.chat`), so only the specification version tells them apart.
 function isModelConfig(model: LanguageModel | ModelConfig): model is ModelConfig {
-  return (model as ModelConfig).provider !== undefined
+  return typeof model === 'object' && !('specificationVersion' in model)
 }
 
 /**
- * Creates a Mastra Agent with Volcanic configuration patterns.
- * Automatically resolves the model from config or environment.
- *
- * `@mastra/core` is imported dynamically so the rest of the `ai` module
- * (createModel, embeddings, vector store) stays usable without installing Mastra.
+ * The AI SDK's `ToolLoopAgent`, wired the Volcanic way and returned as it is: the model from a
+ * config or the environment (`createModel`), and the agent's name as the `functionId` of its
+ * telemetry, so its spans are grouped by agent. Every other setting is the SDK's own.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createAgent(config: AgentConfig): Promise<any> {
-  const { Agent } = await import('@mastra/core/agent')
-
-  // Resolve the model: if it's a ModelConfig -> createModel(), otherwise use it directly
-  const model = isModelConfig(config.model) ? await createModel(config.model) : config.model
-
-  return new Agent({
-    id: config.name, // Use name as ID for simplicity
-    name: config.name,
-    instructions: config.instructions,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    model: model as any,
-    // Mastra tools type is generic Record<string, ToolAction<...>> but we use unknown here for flexibility
-    // Consumers should ensure tools are valid Mastra tools
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tools: config.tools as any
-  })
+export async function createAgent<CALL_OPTIONS = never, TOOLS extends ToolSet = NoTools>(
+  config: AgentConfig<CALL_OPTIONS, TOOLS>
+): Promise<ToolLoopAgent<CALL_OPTIONS, TOOLS>> {
+  const { ToolLoopAgent } = await import('ai')
+  const { name, model, telemetry, ...settings } = config
+  const resolved = isModelConfig(model) ? await createModel(model) : model
+  return new ToolLoopAgent<CALL_OPTIONS, TOOLS>({
+    ...settings,
+    id: name,
+    model: resolved,
+    telemetry: { functionId: name, ...telemetry }
+    // `toolsContext` is a conditional type on TOOLS, which TypeScript cannot resolve inside a
+    // generic body; the caller's config is checked against it with TOOLS known.
+  } as ToolLoopAgentSettings<CALL_OPTIONS, TOOLS>)
 }

@@ -14,7 +14,3 @@ export type {
   VectorStoreConfig,
   VectorMatch
 } from './types.js'
-
-// Mastra Re-exports
-// Users should import directly from @mastra/core as it is a peer dependency
-// export * from '@mastra/core'

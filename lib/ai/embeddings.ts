@@ -1,5 +1,6 @@
 import type { EmbeddingModel } from 'ai'
 import type { EmbedderConfig, ProviderName } from './types.js'
+import { loadProvider } from './provider.js'
 
 // Per-provider env mapping for embedding models (mirrors model.ts conventions).
 const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: string }> = {
@@ -10,20 +11,9 @@ const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: 
   ollama: { apiKey: '', model: 'OLLAMA_EMBEDDING_MODEL', baseUrl: 'OLLAMA_BASE_URL' }
 }
 
-// Different ai-sdk provider packages expose the embedding factory under slightly
-// different names across versions — resolve whichever is present.
-function resolveEmbeddingModel(providerFactory: any, modelName: string): EmbeddingModel {
-  const fn =
-    providerFactory?.textEmbeddingModel ?? providerFactory?.embedding ?? providerFactory?.textEmbedding
-  if (typeof fn !== 'function') {
-    throw new Error('Selected provider SDK does not expose a text-embedding factory')
-  }
-  return fn.call(providerFactory, modelName) as EmbeddingModel
-}
-
 /**
  * Creates an embedding model from explicit config or environment variables.
- * Uses dynamic import() for tree-shaking — only the selected provider SDK loads.
+ * Uses dynamic import() for tree-shaking: only the selected provider SDK loads.
  *
  * Resolution order: config > env. The embedding provider can differ from the
  * chat provider via AI_EMBEDDING_PROVIDER (falls back to AI_PROVIDER).
@@ -54,32 +44,7 @@ export async function createEmbedder(config?: EmbedderConfig): Promise<Embedding
     throw new Error(`Embedding model name is required for provider ${provider}`)
   }
 
-  switch (provider) {
-    case 'openai': {
-      if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-expect-error optional provider SDK (dynamic import)
-      const { createOpenAI } = await import('@ai-sdk/openai')
-      return resolveEmbeddingModel(createOpenAI({ apiKey }), modelName)
-    }
-    case 'mistral': {
-      if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      const { createMistral } = await import('@ai-sdk/mistral')
-      return resolveEmbeddingModel(createMistral({ apiKey }), modelName)
-    }
-    case 'google': {
-      if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-expect-error optional provider SDK (dynamic import)
-      const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
-      return resolveEmbeddingModel(createGoogleGenerativeAI({ apiKey }), modelName)
-    }
-    case 'ollama': {
-      const { createOllama } = await import('ai-sdk-ollama')
-      const factory = baseUrl ? createOllama({ baseURL: baseUrl }) : createOllama({})
-      return resolveEmbeddingModel(factory, modelName)
-    }
-    default:
-      throw new Error(`Provider ${provider} embedding implementation missing`)
-  }
+  return (await loadProvider(provider, { apiKey, baseUrl })).embeddingModel(modelName)
 }
 
 /**

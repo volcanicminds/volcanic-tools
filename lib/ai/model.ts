@@ -1,5 +1,6 @@
 import type { LanguageModel } from 'ai'
 import type { ModelConfig, ProviderName } from './types.js'
+import { loadProvider } from './provider.js'
 
 // Default env variable mapping per provider
 const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: string }> = {
@@ -12,7 +13,7 @@ const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: 
 
 /**
  * Creates a LanguageModel from explicit config or environment variables.
- * Uses dynamic import() for tree-shaking — only the selected provider SDK is loaded.
+ * Uses dynamic import() for tree-shaking: only the selected provider SDK is loaded.
  */
 export async function createModel(config?: ModelConfig): Promise<LanguageModel> {
   // If config is provided, prefer it. Otherwise, look for AI_PROVIDER in env.
@@ -36,45 +37,5 @@ export async function createModel(config?: ModelConfig): Promise<LanguageModel> 
     throw new Error(`Model name is required for provider ${provider}`)
   }
 
-  switch (provider) {
-    case 'openai': {
-      if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-expect-error dynamic import
-      const { openai } = await import('@ai-sdk/openai')
-      return openai(modelName, { apiKey }) as LanguageModel
-    }
-
-    case 'mistral': {
-      if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      const { createMistral } = await import('@ai-sdk/mistral')
-      const mistral = createMistral({ apiKey })
-      return mistral(modelName) as LanguageModel
-    }
-
-    case 'ollama': {
-      const { ollama, createOllama } = await import('ai-sdk-ollama')
-      if (baseUrl) {
-        const customOllama = createOllama({ baseURL: baseUrl })
-        return customOllama(modelName) as LanguageModel
-      }
-      return ollama(modelName) as LanguageModel
-    }
-
-    case 'google': {
-      if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-expect-error dynamic import
-      const { google } = await import('@ai-sdk/google')
-      return google(modelName, { apiKey }) as LanguageModel
-    }
-
-    case 'anthropic': {
-      if (!apiKey) throw new Error(`Missing API Key for ${provider}`)
-      // @ts-expect-error dynamic import
-      const { anthropic } = await import('@ai-sdk/anthropic')
-      return anthropic(modelName, { apiKey }) as LanguageModel
-    }
-
-    default:
-      throw new Error(`Provider ${provider} implementation mapping missing`)
-  }
+  return (await loadProvider(provider, { apiKey, baseUrl })).languageModel(modelName)
 }

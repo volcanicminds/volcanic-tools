@@ -1,4 +1,4 @@
-import type { LanguageModel } from 'ai'
+import type { LanguageModel, ToolLoopAgentSettings, ToolSet } from 'ai'
 
 export type ProviderName = 'openai' | 'mistral' | 'ollama' | 'google' | 'anthropic'
 
@@ -9,11 +9,18 @@ export interface ModelConfig {
   baseUrl?: string           // Per ollama o endpoint custom
 }
 
-export interface AgentConfig {
+// The SDK's own default for an agent's tools, so an agent without tools has the SDK's type.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export type NoTools = {}
+
+// The settings of the SDK's `ToolLoopAgent`, with a name in place of `id` and a model that may
+// be a config.
+export type AgentConfig<CALL_OPTIONS = never, TOOLS extends ToolSet = NoTools> = Omit<
+  ToolLoopAgentSettings<CALL_OPTIONS, TOOLS>,
+  'id' | 'model'
+> & {
   name: string
-  instructions: string
-  model: LanguageModel | ModelConfig  // Flessibile: modello già creato o config
-  tools?: Record<string, unknown>     // Mastra-compatible tools
+  model: LanguageModel | ModelConfig
 }
 
 export interface ConcurrencyConfig {

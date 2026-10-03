@@ -109,10 +109,17 @@
     "qrcode": "^1.5.4"
   },
   "peerDependencies": {
-    "@mastra/core": ">=1.0.0",
-    "ai": ">=4.0.0"
+    "@ai-sdk/anthropic": "^4.0.0",
+    "@ai-sdk/google": "^4.0.0",
+    "@ai-sdk/mistral": "^4.0.0",
+    "@ai-sdk/openai": "^4.0.0",
+    "ai": "^7.0.0",
+    "ai-sdk-ollama": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    },
     "@ai-sdk/openai": {
       "optional": true
     },
@@ -130,7 +137,10 @@
     }
   },
   "devDependencies": {
-    "@ai-sdk/mistral": "^3.0.20",
+    "@ai-sdk/anthropic": "^4.0.71",
+    "@ai-sdk/google": "^4.0.87",
+    "@ai-sdk/mistral": "^4.0.56",
+    "@ai-sdk/openai": "^4.0.83",
     "@electric-sql/pglite": "^0.5.3",
     "@electric-sql/pglite-pgvector": "^0.0.4",
     "@eslint/js": "^9.39.2",
@@ -139,14 +149,16 @@
     "@types/node": "^25.0.3",
     "@types/nodemailer": "^7.0.4",
     "@types/qrcode": "^1.5.6",
-    "ai-sdk-ollama": "^3.7.0",
+    "ai": "^7.0.127",
+    "ai-sdk-ollama": "^4.4.0",
     "eslint": "^9.39.2",
     "expect": "^30.2.0",
     "globals": "^16.5.0",
     "mocha": "^11.7.5",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0"
+    "typescript-eslint": "^8.50.0",
+    "zod": "^4.6.5"
   },
   "engines": {
     "node": ">=26"

@@ -250,15 +250,19 @@ transfer.onUploadFinish((upload, req, res) => {
 })
 ```
 
-### AI Module (New)
+### AI module
 
-The AI module provides a standardized way to create AI models and agents, wrapping the Vercel AI SDK and Mastra.
+The AI module wires the [AI SDK](https://ai-sdk.dev) (version 7): models from a config or the environment, and
+agents that are the SDK's own `ToolLoopAgent`.
 
 **Features:**
 
 - **Unified Model Factory:** Create models with `createModel` supporting OpenAI, Mistral, Ollama, Anthropic, Google.
+  The configured `apiKey` and `baseUrl` win over the provider's own environment variable.
 - **Environment Variable Fallback:** Automatically uses `AI_PROVIDER`, `OPENAI_API_KEY`, etc. if no config is provided.
-- **Mastra Agent Wrapper:** `createAgent` simplifies Mastra agent creation with Volcanic configuration.
+- **Agents:** `createAgent` returns the AI SDK's `ToolLoopAgent` as it is. The model may be a config; the agent's
+  `name` becomes its `id` and the `functionId` of its telemetry, so its spans are grouped by agent. Every other
+  setting (`instructions`, `tools`, `stopWhen`, `prepareCall`, `telemetry`) is the SDK's.
 - **Concurrency Guard:** Manage concurrent AI requests per provider to avoid rate limits.
 - **Embeddings:** `createEmbedder` / `embedText` / `embedTexts` produce vectors (OpenAI, Mistral, Google, Ollama), parametrizable via config or env.
 - **Vector store:** `PgVectorStore`, an engine‑agnostic pgvector helper that runs identically on real Postgres and embedded PGlite.
@@ -266,17 +270,27 @@ The AI module provides a standardized way to create AI models and agents, wrappi
 **Usage:**
 
 ```typescript
+import { tool } from 'ai'
+import { z } from 'zod'
 import { createModel, createAgent, ConcurrencyGuard } from '@volcanicminds/tools/ai'
 
 // 1. Create a Model (uses Env vars by default)
 const model = await createModel()
 
-// 2. Create an Agent
+// 2. Create an Agent: the AI SDK's ToolLoopAgent
 const agent = await createAgent({
-  name: 'Auditor',
-  instructions: 'You are an auditor...',
-  model: model // or config object
+  name: 'auditor',
+  instructions: 'You are an auditor.',
+  model, // or a config: { provider: 'openai', model: 'gpt-4o' }
+  tools: {
+    invoice: tool({
+      description: 'An invoice by number',
+      inputSchema: z.object({ number: z.string() }),
+      execute: async ({ number }) => findInvoice(number)
+    })
+  }
 })
+const { text } = await agent.generate({ prompt: 'Check invoice 42' })
 
 // 3. Concurrency Control
 const guard = new ConcurrencyGuard()
@@ -287,13 +301,14 @@ await guard.run('openai', async () => {
 
 **Installation:**
 
-You must install the peer dependencies:
+The AI module needs `ai` (version 7), which asks for `zod` as its own peer. Both are optional peers of this
+package, so the other modules install without them:
 
 ```bash
-npm install ai @mastra/core
+npm install ai zod
 ```
 
-And the provider SDKs you need.
+And the provider SDKs you need (version 4).
 
 _Example for OpenAI:_
 

@@ -40,15 +40,16 @@ volte.
 | `@volcanicminds/tools/logger` | `lib/util/logger` | Wrapper Pino (usa `global.log` se presente) | — |
 | `@volcanicminds/tools/storage` | `lib/storage` | Client S3/Minio (upload, presigned URL) | `minio`, `@aws-sdk/client-s3` |
 | `@volcanicminds/tools/transfer` | `lib/transfer` | Upload resumable TUS.io (local/s3) | `@tus/server`, `@tus/file-store`, `@tus/s3-store` |
-| `@volcanicminds/tools/ai` | `lib/ai` | Factory model/agent multi-provider | **peer** `ai`, `@mastra/core` |
+| `@volcanicminds/tools/ai` | `lib/ai` | Factory model/agent multi-provider | **peer** opzionale `ai` 7 |
 
-## Modulo AI (il più nuovo — attenzione)
+## Modulo AI (il più nuovo, attenzione)
 
-Wrappa la **Vercel AI SDK** + **Mastra**. API: `createModel(config?)`, `createAgent(config)`, `ConcurrencyGuard`.
-- **Peer dependencies opzionali**: il provider SDK va installato a parte (`@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/mistral`, `ai-sdk-ollama`). I model sono creati dinamicamente per non caricare SDK inutilizzati.
+Cablaggio dell'**AI SDK 7**. API: `createModel(config?)`, `createAgent(config)` (restituisce il `ToolLoopAgent` dell'SDK così com'è), `ConcurrencyGuard`.
+- **Peer dependencies opzionali**: `ai` 7 e il provider SDK 4 vanno installati a parte (`@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/mistral`, `ai-sdk-ollama`). I provider li crea `lib/ai/provider.ts`, sempre con la factory `create*`: le istanze di default leggono la propria variabile d'ambiente e ignorano la chiave configurata.
 - **Fallback da env**: `AI_PROVIDER` + `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/`GOOGLE_API_KEY`/`OLLAMA_BASE_URL` + `*_MODEL`.
 - **ConcurrencyGuard** obbligatorio per limitare richieste concorrenti per provider (limiti default: openai 5, mistral 10, google 10, anthropic 5, ollama 2 — vedi `docs/limits.md`).
-- File: `lib/ai/model.ts`, `lib/ai/agent.ts`, `lib/ai/concurrency.ts`, `lib/ai/types.ts`.
+- File: `lib/ai/provider.ts`, `lib/ai/model.ts`, `lib/ai/agent.ts`, `lib/ai/embeddings.ts`, `lib/ai/concurrency.ts`, `lib/ai/types.ts`.
+- Sotto mocha gli spec si caricano con `require()`: con tsx gli import statici di `ai` nello spec sono una copia CommonJS, diversa dall'`import()` dinamico della lib. Per confronti di identità (`instanceof`) nei test, prendere la classe con `await import('ai')`.
 
 > Nota AI: quando si lavora su questo modulo, i modelli Claude più recenti sono Opus/Sonnet/Haiku 4.x e Fable 5 — non hardcodare vecchi id (es. `claude-3-5-sonnet`) presi dal README come default.
 
