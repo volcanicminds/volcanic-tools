@@ -8,7 +8,8 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 - **Module System:** ESM (`"type": "module"`)
 - **Types:** TypeScript
 - **Dependencies:** `@aws-sdk/client-s3`, `@tus/server`, `minio`, `nodemailer`, `otpauth`, `qrcode`.
-- **Peer Dependencies (optional):** `ai` 7 and the provider SDKs 4 (`@ai-sdk/*`, `ai-sdk-ollama`), only for `ai/`.
+- **Peer Dependencies (optional):** `ai` 7, the provider SDKs 4 (`@ai-sdk/*`, `ai-sdk-ollama`) and `@ai-sdk/otel`
+  1, only for `ai/`.
 
 ## Codebase Architecture
 - `lib/`: Source code directory.
@@ -36,6 +37,11 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 - `createAgent` returns the AI SDK's `ToolLoopAgent` as it is, with no type of its own: the model may be a config
   (resolved by `createModel`), `name` becomes the agent's `id` and its telemetry `functionId`, every other setting is
   the SDK's (`AgentConfig` is `ToolLoopAgentSettings` minus `id` and `model`).
+- Telemetry (`lib/ai/telemetry.ts`): the first call of the module registers the AI SDK's OpenTelemetry integration
+  once per process, if `@ai-sdk/otel` is installed (optional peer) and `AI_TELEMETRY` is not `false`, unless the
+  application registered one already. Content (prompts, responses, tool arguments, embedded texts) stays out of the
+  spans unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`; a call's own `recordInputs` or
+  `recordOutputs` wins. The registry is process-wide, so the default covers direct AI SDK calls too.
 
 ## Embeddings & Vector Search
 - `createEmbedder` / `embedText` / `embedTexts`: produce vectors. Provider/model resolved from config or env

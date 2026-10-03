@@ -1,6 +1,7 @@
 import type { LanguageModel, ToolLoopAgent, ToolLoopAgentSettings, ToolSet } from 'ai'
 import type { AgentConfig, ModelConfig, NoTools } from './types.js'
 import { createModel } from './model.js'
+import { ensureTelemetry } from './telemetry.js'
 
 // A model has a `provider` too (`openai.chat`), so only the specification version tells them apart.
 function isModelConfig(model: LanguageModel | ModelConfig): model is ModelConfig {
@@ -15,6 +16,7 @@ function isModelConfig(model: LanguageModel | ModelConfig): model is ModelConfig
 export async function createAgent<CALL_OPTIONS = never, TOOLS extends ToolSet = NoTools>(
   config: AgentConfig<CALL_OPTIONS, TOOLS>
 ): Promise<ToolLoopAgent<CALL_OPTIONS, TOOLS>> {
+  await ensureTelemetry()
   const { ToolLoopAgent } = await import('ai')
   const { name, model, telemetry, ...settings } = config
   const resolved = isModelConfig(model) ? await createModel(model) : model

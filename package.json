@@ -113,11 +113,15 @@
     "@ai-sdk/google": "^4.0.0",
     "@ai-sdk/mistral": "^4.0.0",
     "@ai-sdk/openai": "^4.0.0",
+    "@ai-sdk/otel": "^1.0.0",
     "ai": "^7.0.0",
     "ai-sdk-ollama": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "ai": {
+      "optional": true
+    },
+    "@ai-sdk/otel": {
       "optional": true
     },
     "@ai-sdk/openai": {
@@ -141,9 +145,12 @@
     "@ai-sdk/google": "^4.0.87",
     "@ai-sdk/mistral": "^4.0.56",
     "@ai-sdk/openai": "^4.0.83",
+    "@ai-sdk/otel": "^1.0.127",
     "@electric-sql/pglite": "^0.5.3",
     "@electric-sql/pglite-pgvector": "^0.0.4",
     "@eslint/js": "^9.39.2",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@types/minio": "^7.1.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.0.3",

@@ -1,6 +1,7 @@
 import type { LanguageModel } from 'ai'
 import type { ModelConfig, ProviderName } from './types.js'
 import { loadProvider } from './provider.js'
+import { ensureTelemetry } from './telemetry.js'
 
 // Default env variable mapping per provider
 const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: string }> = {
@@ -16,6 +17,7 @@ const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: 
  * Uses dynamic import() for tree-shaking: only the selected provider SDK is loaded.
  */
 export async function createModel(config?: ModelConfig): Promise<LanguageModel> {
+  await ensureTelemetry()
   // If config is provided, prefer it. Otherwise, look for AI_PROVIDER in env.
   const provider = (config?.provider ?? process.env.AI_PROVIDER) as ProviderName
 

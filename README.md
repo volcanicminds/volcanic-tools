@@ -263,6 +263,8 @@ agents that are the SDK's own `ToolLoopAgent`.
 - **Agents:** `createAgent` returns the AI SDK's `ToolLoopAgent` as it is. The model may be a config; the agent's
   `name` becomes its `id` and the `functionId` of its telemetry, so its spans are grouped by agent. Every other
   setting (`instructions`, `tools`, `stopWhen`, `prepareCall`, `telemetry`) is the SDK's.
+- **Telemetry:** with `@ai-sdk/otel` installed, AI calls are traced over OpenTelemetry, without their content
+  unless asked for (see below).
 - **Concurrency Guard:** Manage concurrent AI requests per provider to avoid rate limits.
 - **Embeddings:** `createEmbedder` / `embedText` / `embedTexts` produce vectors (OpenAI, Mistral, Google, Ollama), parametrizable via config or env.
 - **Vector store:** `PgVectorStore`, an engine‑agnostic pgvector helper that runs identically on real Postgres and embedded PGlite.
@@ -333,6 +335,41 @@ _Example for Ollama:_
 ```bash
 npm install ai-sdk-ollama
 ```
+
+**Telemetry (OpenTelemetry):**
+
+Installing `@ai-sdk/otel` turns it on: the first call of this module (`createModel`, `createEmbedder`,
+`createAgent`, `embedText`, `embedTexts`) registers the AI SDK's OpenTelemetry integration, once per process. The
+spans go to the tracer provider already running, the one `@volcanicminds/backend` starts from the `OTEL_*`
+variables for instance: one per agent run, per step, per model call and per tool call, with the agent's name in
+`gen_ai.agent.name`.
+
+```bash
+npm install @ai-sdk/otel
+```
+
+| Variable | Effect | Default |
+| --- | --- | --- |
+| `AI_TELEMETRY` | `false` registers nothing | on, when `@ai-sdk/otel` is installed |
+| `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | `true` records prompts, instructions, responses, tool arguments and results, embedded texts | `false` |
+
+Content stays out of the spans by default, because prompts and responses may carry personal data. A call's own
+setting wins over the variable, for one agent:
+
+```typescript
+const agent = await createAgent({ name: 'auditor', model, telemetry: { recordInputs: true } })
+```
+
+Things to know:
+
+- The registry is process-wide: from the first call on, every AI SDK call is traced, including the ones the
+  application makes directly with `generateText` or `embed`, with the same default on content. Calls made before
+  it are not.
+- An application that registers the integration itself (`registerTelemetry(new OpenTelemetry())` from `ai`) keeps
+  it: this module adds none, so the spans do not come twice. Register it before the first call of this module,
+  and the content default above no longer applies: the SDK's does, which records it.
+- `@ai-sdk/otel` pins `ai` to its own exact version: with another `ai` 7 release the application gets a second
+  copy of `ai` in `node_modules`. It works, because the registry lives on `globalThis`, but it weighs.
 
 ### Embeddings & Vector Search (pgvector)
 

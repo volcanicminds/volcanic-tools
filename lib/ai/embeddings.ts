@@ -1,6 +1,7 @@
 import type { EmbeddingModel } from 'ai'
 import type { EmbedderConfig, ProviderName } from './types.js'
 import { loadProvider } from './provider.js'
+import { ensureTelemetry } from './telemetry.js'
 
 // Per-provider env mapping for embedding models (mirrors model.ts conventions).
 const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: string }> = {
@@ -19,6 +20,7 @@ const ENV_KEYS: Record<ProviderName, { apiKey: string; model: string; baseUrl?: 
  * chat provider via AI_EMBEDDING_PROVIDER (falls back to AI_PROVIDER).
  */
 export async function createEmbedder(config?: EmbedderConfig): Promise<EmbeddingModel> {
+  await ensureTelemetry()
   const provider = (config?.provider ??
     process.env.AI_EMBEDDING_PROVIDER ??
     process.env.AI_PROVIDER) as ProviderName
@@ -77,6 +79,7 @@ export async function embedTexts(
 async function toModel(
   modelOrConfig?: EmbeddingModel | EmbedderConfig
 ): Promise<EmbeddingModel> {
+  await ensureTelemetry()
   // A ready EmbeddingModel is an object exposing specificationVersion/modelId;
   // anything else is treated as config.
   if (modelOrConfig && typeof (modelOrConfig as any).modelId === 'string') {
