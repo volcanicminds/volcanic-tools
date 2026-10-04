@@ -262,7 +262,8 @@ agents that are the SDK's own `ToolLoopAgent`.
 - **Environment Variable Fallback:** Automatically uses `AI_PROVIDER`, `OPENAI_API_KEY`, etc. if no config is provided.
 - **Agents:** `createAgent` returns the AI SDK's `ToolLoopAgent` as it is. The model may be a config; the agent's
   `name` becomes its `id` and the `functionId` of its telemetry, so its spans are grouped by agent. Every other
-  setting (`instructions`, `tools`, `stopWhen`, `prepareCall`, `telemetry`) is the SDK's.
+  setting (`instructions`, `tools`, `stopWhen`, `prepareCall`, `telemetry`) is the SDK's, except with tools from
+  `defineTool`: then the caller comes with each call (see below).
 - **Tools:** `defineTool` defines a tool once, for the AI SDK (`toAiTools`) and for an MCP server
   (`@volcanicminds/tools/mcp`), acting as the person using it (see below).
 - **Telemetry:** with `@ai-sdk/otel` installed, AI calls are traced over OpenTelemetry, without their content
@@ -404,6 +405,23 @@ const { text } = await generateText({ model, tools: aiTools, toolsContext: calle
 
 A call without `toolsContext` does not compile; if it runs anyway, it throws an `AI_TypeValidationError` ("No
 caller") before any tool runs, because the AI SDK validates the context of every tool.
+
+An agent takes the same tools, and the caller as an option of each call:
+
+```typescript
+import { createAgent } from '@volcanicminds/tools/ai'
+
+// Once, at startup: the agent holds nobody's credential.
+const assistant = await createAgent({ name: 'sales', model, instructions: 'Answer about the stock.', tools })
+
+// Per request.
+const { text } = await assistant.generate({ prompt, options: { caller } })
+```
+
+`createAgent` writes the agent's `prepareCall`, which hands the caller to the tools, so a config that sets
+`prepareCall`, `callOptionsSchema` or `toolsContext` is refused. A call without `options: { caller }` does not
+compile; if it runs anyway, it fails before the model is called. An agent takes tools from `defineTool` (a list) or
+SDK tools (a record), not both.
 
 The same tools over MCP, mounted by the application on one of its own authenticated routes:
 

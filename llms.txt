@@ -39,7 +39,8 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 - `ConcurrencyGuard` must be used when managing concurrent requests to prevent provider rate-limiting.
 - `createAgent` returns the AI SDK's `ToolLoopAgent` as it is, with no type of its own: the model may be a config
   (resolved by `createModel`), `name` becomes the agent's `id` and its telemetry `functionId`, every other setting is
-  the SDK's (`AgentConfig` is `ToolLoopAgentSettings` minus `id` and `model`).
+  the SDK's (`AgentConfig` is `ToolLoopAgentSettings` minus `id` and `model`). With tools from `defineTool` see
+  "Tools and MCP".
 - Telemetry (`lib/ai/telemetry.ts`): the first call of the module registers the AI SDK's OpenTelemetry integration
   once per process, if `@ai-sdk/otel` is installed (optional peer) and `AI_TELEMETRY` is not `false`, unless the
   application registered one already. Content (prompts, responses, tool arguments, embedded texts) stays out of the
@@ -57,6 +58,11 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
 - `toAiTools(definitions)` builds an AI SDK tool set once; each `generateText` or `streamText` call passes the
   caller as `toolsContext: callerContext(definitions, caller)`. A call without it does not compile, and at runtime
   runs no tool: the SDK validates the context.
+- `createAgent({ name, model, tools: definitions })` (`CallerAgentConfig`) builds the agent once; each call passes
+  the caller as `options: { caller }`, which the `prepareCall` written by `createAgent` hands to the tools. A config
+  that sets `prepareCall`, `callOptionsSchema` or `toolsContext` is refused; a call without a caller does not
+  compile, and at runtime fails before the model runs. Tools from `defineTool` (a list) and SDK tools (a record) do
+  not mix in one agent.
 - `createMcpHandler({ name, version, tools, onError })` (`lib/mcp`) returns a web-standard
   `{ fetch(request, { caller, parsedBody }), close }`, stateless, built on `createMcpHandler` of
   `@modelcontextprotocol/server`. The application mounts it on its own authenticated route and passes the caller of

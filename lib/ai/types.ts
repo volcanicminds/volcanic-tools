@@ -1,4 +1,6 @@
 import type { LanguageModel, ToolLoopAgentSettings, ToolSet } from 'ai'
+import type { ToolDefinition } from './tool.js'
+import type { AiTools, CallerContext } from './tool-set.js'
 
 export type ProviderName = 'openai' | 'mistral' | 'ollama' | 'google' | 'anthropic'
 
@@ -21,6 +23,17 @@ export type AgentConfig<CALL_OPTIONS = never, TOOLS extends ToolSet = NoTools> =
 > & {
   name: string
   model: LanguageModel | ModelConfig
+}
+
+// An agent whose tools come from `defineTool`. The caller is an option of each call, so the
+// settings hold no identity; `createAgent` writes the wiring it takes out.
+export type CallerAgentConfig<DEFS extends readonly ToolDefinition[]> = Omit<
+  ToolLoopAgentSettings<CallerContext, AiTools<DEFS>>,
+  'id' | 'model' | 'tools' | 'toolsContext' | 'callOptionsSchema' | 'prepareCall'
+> & {
+  name: string
+  model: LanguageModel | ModelConfig
+  tools: DEFS
 }
 
 export interface ConcurrencyConfig {

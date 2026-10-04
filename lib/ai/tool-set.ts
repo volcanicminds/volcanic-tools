@@ -16,6 +16,10 @@ export type AiCallerContext<DEFS extends readonly ToolDefinition[]> = {
   [D in DEFS[number] as D['name']]: CallerContext
 }
 
+export function hasCaller(value: unknown): value is CallerContext {
+  return typeof (value as Partial<CallerContext> | undefined)?.caller === 'function'
+}
+
 // The SDK validates a tool's context before running it, so a call that forgot the caller runs no
 // tool instead of reaching the API as nobody. Never sent to the model, so no JSON Schema.
 const callerContextSchema: StandardSchemaV1<CallerContext> = {
@@ -23,8 +27,8 @@ const callerContextSchema: StandardSchemaV1<CallerContext> = {
     version: 1,
     vendor: 'volcanicminds',
     validate: (value) =>
-      typeof (value as Partial<CallerContext> | undefined)?.caller === 'function'
-        ? { value: value as CallerContext }
+      hasCaller(value)
+        ? { value }
         : { issues: [{ message: 'No caller: pass callerContext(tools, caller) as the toolsContext of the call' }] }
   }
 }
