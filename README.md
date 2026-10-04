@@ -428,7 +428,13 @@ The same tools over MCP, mounted by the application on one of its own authentica
 ```typescript
 import { createMcpHandler } from '@volcanicminds/tools/mcp'
 
-const mcp = await createMcpHandler({ name: 'sales', version: '1.0.0', tools, onError: (error, tool) => log.error({ error, tool }) })
+const mcp = await createMcpHandler({
+  name: 'sales',
+  version: '1.0.0',
+  tools,
+  allowedOrigins: ['https://console.example.com'], // browsers; a client that sends no Origin always passes
+  onError: (error, tool) => log.error({ error, tool })
+})
 
 // In the route, per request: a web-standard Request in, a Response out.
 const response = await mcp.fetch(request, { caller, parsedBody: req.body })
@@ -447,6 +453,10 @@ Things to know:
 - The MCP server is stateless Streamable HTTP, built on `createMcpHandler` of `@modelcontextprotocol/server` 2: a
   server per request, with the caller carried to the tools through `AsyncLocalStorage`. It checks no credential:
   the route that mounts it authenticates the request and builds the caller.
+- It checks the `Origin`, which the MCP specification (2026-07-28, Streamable HTTP) asks of every server against
+  DNS rebinding and the SDK leaves to whoever mounts it: an `Origin` not in `allowedOrigins` gets 403 before any
+  tool runs, a request without one passes. Entries are exact origins (`scheme://host[:port]`); `*`, a path or a
+  trailing slash stop the handler from being created, and an empty list admits no browser.
 - `./mcp` re-exports `defineTool` and the errors, so an MCP server alone does not need `ai`.
   `@volcanicminds/backend` knows nothing about MCP.
 

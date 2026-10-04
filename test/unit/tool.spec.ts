@@ -65,8 +65,12 @@ async function viaAi(name: string, input: object, toolsContext: AiCallerContext<
   return result.steps[0].content.find((part: any) => part.type === 'tool-result' || part.type === 'tool-error') as any
 }
 
-async function mcpClient(handler: McpHandler, caller: ApiCaller) {
-  const fetch = (url: string | URL, init?: RequestInit) => handler.fetch(new Request(url, init), { caller })
+async function mcpClient(handler: McpHandler, caller: ApiCaller, origin?: string) {
+  const fetch = (url: string | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers)
+    if (origin) headers.set('origin', origin)
+    return handler.fetch(new Request(url, { ...init, headers }), { caller })
+  }
   const client = new Client({ name: 'test', version: '0.0.0' })
   await client.connect(new StreamableHTTPClientTransport(new URL('http://app.test/mcp'), { fetch }))
   return client
@@ -103,7 +107,53 @@ describe('AI defineTool', () => {
 
   it('refuses two tools with the same name, in both adapters', async () => {
     expect(() => toAiTools([whoami, whoami])).toThrow(/defined twice/)
-    await expect(createMcpHandler({ name: 't', version: '0', tools: [whoami, whoami] })).rejects.toThrow(/defined twice/)
+    await expect(createMcpHandler({ name: 't', version: '0', tools: [whoami, whoami], allowedOrigins: [] })).rejects.toThrow(/defined twice/)
+  })
+})
+
+describe('MCP createMcpHandler checks the Origin', () => {
+  const trusted = 'https://console.app.test'
+  let handler: McpHandler
+
+  before(async () => {
+    handler = await createMcpHandler({ name: 'test', version: '0.0.0', tools, allowedOrigins: [trusted] })
+  })
+  after(() => handler.close())
+
+  /** A tool call as a browser page on `origin` would send it, without the SDK client. */
+  const callFrom = (origin: string, caller: ApiCaller) =>
+    handler.fetch(
+      new Request('http://app.test/mcp', {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'whoami', arguments: { tag: 'x' } } })
+      }),
+      { caller }
+    )
+
+  it('answers 403 to a browser origin it does not list, before any tool runs', async () => {
+    for (const origin of ['https://evil.test', 'null', `${trusted}:8443`,'http://console.app.test']) {
+      const requests: ApiRequest[] = []
+      const response = await callFrom(origin, apiAs('alice', requests))
+      expect([origin, response.status]).toEqual([origin, 403])
+      expect(await response.json()).toEqual({ jsonrpc: '2.0', error: { code: -32000, message: 'Origin not allowed' } })
+      expect(requests).toEqual([])
+    }
+  })
+
+  it('serves a listed origin, and a client that sends none', async () => {
+    for (const origin of [trusted, undefined]) {
+      const client = await mcpClient(handler, apiAs('alice'), origin)
+      const result = await client.callTool({ name: 'whoami', arguments: { tag: 'o' } })
+      await client.close()
+      expect(JSON.parse(text(result))).toEqual({ user: 'alice', tag: 'o' })
+    }
+  })
+
+  it('refuses an allowedOrigins entry that is not an origin', async () => {
+    for (const entry of ['*', `${trusted}/`, `${trusted}/console`,'console.app.test', 'file:///tmp/page.html']) {
+      await expect(createMcpHandler({ name: 't', version: '0', tools, allowedOrigins: [entry] })).rejects.toThrow(/is not an origin/)
+    }
   })
 })
 
@@ -112,7 +162,13 @@ describe('AI toAiTools and createMcpHandler serve the same tool', () => {
   const failures: Array<[unknown, string]> = []
 
   before(async () => {
-    handler = await createMcpHandler({ name: 'test', version: '0.0.0', tools, onError: (e, tool) => void failures.push([e, tool]) })
+    handler = await createMcpHandler({
+      name: 'test',
+      version: '0.0.0',
+      tools,
+      allowedOrigins: [],
+      onError: (e, tool) => void failures.push([e, tool])
+    })
   })
   after(() => handler.close())
 

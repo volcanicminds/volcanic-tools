@@ -63,11 +63,12 @@ Tree-shakeable TypeScript ESM library providing modular utilities for the Volcan
   that sets `prepareCall`, `callOptionsSchema` or `toolsContext` is refused; a call without a caller does not
   compile, and at runtime fails before the model runs. Tools from `defineTool` (a list) and SDK tools (a record) do
   not mix in one agent.
-- `createMcpHandler({ name, version, tools, onError })` (`lib/mcp`) returns a web-standard
+- `createMcpHandler({ name, version, tools, allowedOrigins, onError })` (`lib/mcp`) returns a web-standard
   `{ fetch(request, { caller, parsedBody }), close }`, stateless, built on `createMcpHandler` of
   `@modelcontextprotocol/server`. The application mounts it on its own authenticated route and passes the caller of
-  each request; the caller reaches the tools through `AsyncLocalStorage`. `@volcanicminds/backend` knows nothing about
-  MCP.
+  each request; the caller reaches the tools through `AsyncLocalStorage`. An `Origin` outside `allowedOrigins`
+  (exact origins, required, `[]` admits no browser) gets 403 before any tool runs; a request without one passes.
+  `@volcanicminds/backend` knows nothing about MCP.
 
 ## Embeddings & Vector Search
 - `createEmbedder` / `embedText` / `embedTexts`: produce vectors. Provider/model resolved from config or env

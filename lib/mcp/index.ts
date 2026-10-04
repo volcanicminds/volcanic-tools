@@ -10,6 +10,13 @@ export interface McpHandlerConfig {
   name: string // announced to the client at initialization
   version: string
   tools: readonly ToolDefinition[]
+  /**
+   * The browser origins that may reach the server (`https://console.example.com`). A request whose
+   * `Origin` is not listed is answered 403 before any tool runs, as the MCP specification asks against
+   * DNS rebinding; a request without one, from a client that is not a browser, passes. An empty list
+   * admits no browser.
+   */
+  allowedOrigins: readonly string[]
   /** Receives what a tool threw before the client got "Tool '<name>' failed" in its place. */
   onError?: (error: unknown, tool: string) => void
 }
@@ -31,6 +38,29 @@ function toText(output: unknown): string {
   return typeof output === 'string' ? output : JSON.stringify(output ?? null)
 }
 
+// Compared as the exact string a browser sends, so an entry must already be one: '*', a path or a
+// trailing slash would never match and would admit less than its author meant, silently.
+function originsOf(entries: readonly string[]): ReadonlySet<string> {
+  for (const entry of entries) {
+    let origin: string | undefined
+    try {
+      origin = new URL(entry).origin
+    } catch {
+      origin = undefined
+    }
+    // `URL.origin` is the string 'null' for a scheme without an origin, the same string an opaque
+    // origin (a sandboxed frame, a file) sends: listing it would admit those.
+    if (origin === undefined || origin === 'null' || origin !== entry) {
+      throw new Error(`allowedOrigins: '${entry}' is not an origin, write it as scheme://host[:port]`)
+    }
+  }
+  return new Set(entries)
+}
+
+// The MCP specification allows a JSON-RPC error with no id as the body of this 403.
+const forbiddenOrigin = () =>
+  Response.json({ jsonrpc: '2.0', error: { code: -32000, message: 'Origin not allowed' } }, { status: 403 })
+
 /**
  * An MCP server over Streamable HTTP, stateless, serving the given tools. The consumer mounts it
  * on one of its own authenticated routes and hands every request the caller it authenticated;
@@ -38,6 +68,7 @@ function toText(output: unknown): string {
  */
 export async function createMcpHandler(config: McpHandlerConfig): Promise<McpHandler> {
   assertUniqueNames(config.tools)
+  const origins = originsOf(config.allowedOrigins)
   const sdk = await import('@modelcontextprotocol/server')
   // The SDK builds a server per request; the caller reaches its tools through the async context
   // of the `fetch` that serves the request, the same one a streamed response keeps.
@@ -69,7 +100,12 @@ export async function createMcpHandler(config: McpHandlerConfig): Promise<McpHan
   })
 
   return {
-    fetch: (request, { caller, parsedBody }) => callers.run(caller, () => handler.fetch(request, { parsedBody })),
+    fetch: async (request, { caller, parsedBody }) => {
+      // The SDK entry validates no Origin by design: the server that mounts it has to.
+      const origin = request.headers.get('origin')
+      if (origin !== null && !origins.has(origin)) return forbiddenOrigin()
+      return callers.run(caller, () => handler.fetch(request, { parsedBody }))
+    },
     close: () => handler.close()
   }
 }
