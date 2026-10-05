@@ -28,11 +28,15 @@ export interface TransferConfig {
 
 export type TransferEventCallback = (uploadOrId: Upload | string, req?: IncomingMessage, res?: ServerResponse) => void
 export type TransferValidator = (req: IncomingMessage, res: ServerResponse) => Promise<void>
+/** What `isValid` hands the check: the fields a Fastify request and a Node request share. */
+export type TransferRequest = Pick<IncomingMessage, 'headers' | 'method' | 'url'>
+export type AnonymousTransferCheck = (req: TransferRequest) => boolean | Promise<boolean>
 
 export class TransferManager {
   private server: Server
   private config: TransferConfig
   private validator: TransferValidator | null = null
+  private anonymousAccess: AnonymousTransferCheck | null = null
 
   constructor(config: TransferConfig) {
     this.config = config
@@ -57,6 +61,25 @@ export class TransferManager {
 
   public setValidator(validator: TransferValidator) {
     this.validator = validator
+  }
+
+  /** The URL path the endpoint is mounted at; `@volcanicminds/backend` mounts it there. */
+  public getPath(): string {
+    return this.config.path
+  }
+
+  /**
+   * Lets a request that carries no credential through `@volcanicminds/backend`'s authentication,
+   * a signed upload link for instance. Without a check every such request is refused.
+   */
+  public setAnonymousAccess(check: AnonymousTransferCheck) {
+    this.anonymousAccess = check
+  }
+
+  /** `@volcanicminds/backend` asks this only for a request that authenticated no subject. */
+  public async isValid(req: TransferRequest): Promise<boolean> {
+    if (!this.anonymousAccess) return false
+    return (await this.anonymousAccess(req)) === true
   }
 
   private createStore() {

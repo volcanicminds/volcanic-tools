@@ -222,6 +222,25 @@ const transfer = new TransferManager({
 })
 ```
 
+#### With @volcanicminds/backend
+
+`TransferManager` implements the backend's `TransferManagement`: inject it as it is, and the backend
+mounts the endpoint at `getPath()`.
+
+```typescript
+await startServer({ ...layer, transferManager: transfer })
+```
+
+The backend serves authenticated requests. One that carries no credential gets 401, unless the
+check given to `setAnonymousAccess` answers `true` for it, a signed upload link for instance:
+
+```typescript
+transfer.setAnonymousAccess((req) => verifyUploadSignature(req.headers['x-upload-signature']))
+```
+
+`setValidator` is a different gate: it runs inside tus on every request that got this far, and a
+validator that throws refuses the request.
+
 #### Integration with Fastify/Node Key
 
 The `transfer` instance exposes a standard Node.js request handler (`handle`). You can use it within a Fastify route or raw Node server.

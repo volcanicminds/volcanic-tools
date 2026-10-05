@@ -110,6 +110,52 @@ describe('TransferManager', () => {
     })
   })
 
+  describe('the contract with @volcanicminds/backend', () => {
+    // `TransferManagement` in the backend's types/global.d.ts. The two packages do not depend on
+    // each other; volcanic-backend-sample type-checks the assignment where both are installed.
+    const CONTRACT = ['isImplemented', 'getPath', 'getServer', 'onUploadCreate', 'onUploadFinish', 'onUploadTerminate', 'handle', 'isValid']
+    const anonymous = { headers: {}, method: 'POST', url: '/files' }
+
+    it('has every method the backend calls', () => {
+      const manager: any = local()
+      for (const name of CONTRACT) expect(typeof manager[name]).toBe('function')
+    })
+
+    it('answers getPath with the configured path', () => {
+      expect(local({ path: '/uploads' }).getPath()).toBe('/uploads')
+    })
+
+    it('vouches for no anonymous request until the application says how', async () => {
+      await expect(local().isValid(anonymous)).resolves.toBe(false)
+    })
+
+    it('asks the anonymous-access check, with the request', async () => {
+      const manager = local()
+      const seen: any[] = []
+      manager.setAnonymousAccess(async (req) => {
+        seen.push(req)
+        return req.headers['x-upload-signature'] === 'signed'
+      })
+      await expect(manager.isValid(anonymous)).resolves.toBe(false)
+      await expect(manager.isValid({ ...anonymous, headers: { 'x-upload-signature': 'signed' } })).resolves.toBe(true)
+      expect(seen).toHaveLength(2)
+    })
+
+    it('reads only a literal true as a yes', async () => {
+      const manager = local()
+      manager.setAnonymousAccess((() => 'yes') as any)
+      await expect(manager.isValid(anonymous)).resolves.toBe(false)
+    })
+
+    it('lets a failing check throw, so the request is not served', async () => {
+      const manager = local()
+      manager.setAnonymousAccess(() => {
+        throw new Error('signature store unreachable')
+      })
+      await expect(manager.isValid(anonymous)).rejects.toThrow('signature store unreachable')
+    })
+  })
+
   describe('the hooks a consumer registers', () => {
     const req = { url: '/files' } as any
     const res = { statusCode: 200 } as any
