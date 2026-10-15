@@ -1,87 +1,780 @@
-# @volcanicminds/tools - AI Agent Context
+# @volcanicminds/tools: reference for AI agents
 
-## Project Purpose
-Tree-shakeable TypeScript ESM library providing modular utilities for the Volcanic Minds backend ecosystem.
+> Tree-shakeable TypeScript utilities for the Volcanic Minds stack: TOTP MFA, SMTP mailer, logger
+> facade, S3/Minio storage, resumable uploads (tus), AI SDK 7 wiring (models, agents, embeddings,
+> pgvector store, tools) and an MCP server for the same tools. Version 0.2.x, branch `v5`, paired with
+> `@volcanicminds/backend` 5.x. The source in `lib/` is the authority when this file and the code differ.
 
-## Tech Stack
-- **Runtime:** Node.js >= 26.x
-- **Module System:** ESM (`"type": "module"`)
-- **Types:** TypeScript
-- **Dependencies:** `@aws-sdk/client-s3`, `@tus/server`, `minio`, `nodemailer`, `otpauth`, `qrcode`,
-  `@standard-schema/spec` (types only).
-- **Peer Dependencies (optional):** `ai` 7, the provider SDKs 4 (`@ai-sdk/*`, `ai-sdk-ollama`) and `@ai-sdk/otel`
-  1, only for `ai/`; `@modelcontextprotocol/server` 2, only for `mcp/`.
+## Requirements
 
-## Codebase Architecture
-- `lib/`: Source code directory.
-  - `ai/`: AI SDK wiring: models, agents (`ToolLoopAgent`), the tool contract (`defineTool`), embeddings, pgvector
-    store.
-  - `mcp/`: an MCP server over Streamable HTTP for the tools of `defineTool`, mounted by the application.
-  - `mailer/`: `nodemailer` wrapper with automatic HTML-to-text conversion.
-  - `mfa/`: Multi-Factor Authentication utilities (TOTP, QR codes) using `otpauth`.
-  - `storage/`: S3/Minio client wrapper.
-  - `transfer/`: Resumable uploads via `tus.io` protocol.
-  - `util/`: Shared utilities (e.g., logger).
-- `dist/`: Compiled output (ignored in git).
-- `docs/`: Human-facing documentation (e.g., limits, architecture).
+- Node.js >= 26, ESM only (`"type": "module"`). In TypeScript with `module: NodeNext`, local imports
+  carry the `.js` extension.
+- `npm install @volcanicminds/tools`
+- Regular dependencies (installed with the package): `otpauth`, `qrcode`, `nodemailer`, `minio`,
+  `@aws-sdk/client-s3`, `@tus/server`, `@tus/file-store`, `@tus/s3-store`, `@standard-schema/spec`.
+- Optional peer dependencies, needed only by `ai` and `mcp` (install them yourself):
 
-## Core Paradigms & Constraints
-1.  **Tree-Shakeable:** Utilities must be independently importable (e.g., `import { Mailer } from '@volcanicminds/tools/mailer'`). Do not create tight coupling between independent modules.
-2.  **Configuration Injection:** Modules prefer configuration objects passed during initialization over direct dependency on `process.env`.
-3.  **Environment Variable Fallbacks:** The AI module explicitly supports falling back to standard environment variables (e.g., `AI_PROVIDER`, `OPENAI_API_KEY`) if explicit configuration is omitted.
-4.  **No `src/` directory:** All source code lives in `lib/`.
-5.  **ESM Only:** Use `.js` extensions in imports (e.g., `import { something } from './file.js'`) even in TypeScript files.
+| Peer | Needed by | When |
+| --- | --- | --- |
+| `ai` ^7 | `/ai` | models, agents, embeddings, `toAiTools` |
+| `@ai-sdk/openai` ^4 | `/ai` | `provider: 'openai'` |
+| `@ai-sdk/anthropic` ^4 | `/ai` | `provider: 'anthropic'` (chat only) |
+| `@ai-sdk/google` ^4 | `/ai` | `provider: 'google'` |
+| `@ai-sdk/mistral` ^4 | `/ai` | `provider: 'mistral'` |
+| `ai-sdk-ollama` ^4 | `/ai` | `provider: 'ollama'` |
+| `@ai-sdk/otel` ^1 | `/ai` | OpenTelemetry spans for AI calls (opt-in by installing it) |
+| `@modelcontextprotocol/server` ^2 | `/mcp` | `createMcpHandler` |
 
-## AI Module Patterns
-- Models are created dynamically to avoid loading unused SDKs. One factory (`lib/ai/provider.ts`) builds the
-  provider for chat and embedding models alike, always through the SDK's `create*` function: the default instances
-  read their own environment variable and ignore a configured key.
-- `ConcurrencyGuard` must be used when managing concurrent requests to prevent provider rate-limiting.
-- `createAgent` returns the AI SDK's `ToolLoopAgent` as it is, with no type of its own: the model may be a config
-  (resolved by `createModel`), `name` becomes the agent's `id` and its telemetry `functionId`, every other setting is
-  the SDK's (`AgentConfig` is `ToolLoopAgentSettings` minus `id` and `model`). With tools from `defineTool` see
-  "Tools and MCP".
-- Telemetry (`lib/ai/telemetry.ts`): the first call of the module registers the AI SDK's OpenTelemetry integration
-  once per process, if `@ai-sdk/otel` is installed (optional peer) and `AI_TELEMETRY` is not `false`, unless the
-  application registered one already. Content (prompts, responses, tool arguments, embedded texts) stays out of the
-  spans unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`; a call's own `recordInputs` or
-  `recordOutputs` wins. The registry is process-wide, so the default covers direct AI SDK calls too.
+`ai` 7 itself lists `zod` (^3.25.76 or ^4.1.8) as its peer. Tool input schemas need Zod 4.2 or later (see
+"Tools"); the application installs `zod`, this package does not.
 
-## Tools and MCP
-- `defineTool({ name, description, input, execute })` (`lib/ai/tool.ts`, exported by `ai/` and `mcp/`) defines a
-  tool once for both adapters. `input` is a schema that is Standard Schema and Standard JSON Schema at once (Zod 4.2
-  or later; not Zod 3). `execute(input, { call })` reaches the application only through `call`, the API bound to
-  the end user's credential: a path, never a URL; a 2xx resolves with the body, anything else throws a
-  `ToolCallError` whose message carries the API `code`.
-- Errors: a `ToolError` (and `ToolCallError`) message reaches the model or the MCP client as it is; any other error
-  becomes "Tool '<name>' failed", with the original as `cause` (and passed to `onError` in MCP).
-- `toAiTools(definitions)` builds an AI SDK tool set once; each `generateText` or `streamText` call passes the
-  caller as `toolsContext: callerContext(definitions, caller)`. A call without it does not compile, and at runtime
-  runs no tool: the SDK validates the context.
-- `createAgent({ name, model, tools: definitions })` (`CallerAgentConfig`) builds the agent once; each call passes
-  the caller as `options: { caller }`, which the `prepareCall` written by `createAgent` hands to the tools. A config
-  that sets `prepareCall`, `callOptionsSchema` or `toolsContext` is refused; a call without a caller does not
-  compile, and at runtime fails before the model runs. Tools from `defineTool` (a list) and SDK tools (a record) do
-  not mix in one agent.
-- `createMcpHandler({ name, version, tools, allowedOrigins, onError })` (`lib/mcp`) returns a web-standard
-  `{ fetch(request, { caller, parsedBody }), close }`, stateless, built on `createMcpHandler` of
-  `@modelcontextprotocol/server`. The application mounts it on its own authenticated route and passes the caller of
-  each request; the caller reaches the tools through `AsyncLocalStorage`. An `Origin` outside `allowedOrigins`
-  (exact origins, required, `[]` admits no browser) gets 403 before any tool runs; a request without one passes.
-  `@volcanicminds/backend` knows nothing about MCP.
+## Entry points
 
-## Embeddings & Vector Search
-- `createEmbedder` / `embedText` / `embedTexts`: produce vectors. Provider/model resolved from config or env
-  (`AI_EMBEDDING_PROVIDER` → falls back to `AI_PROVIDER`; model from e.g. `OPENAI_EMBEDDING_MODEL`). Anthropic has
-  no embeddings API. Provider SDKs loaded via dynamic `import()`.
-- `PgVectorStore`: engine-agnostic pgvector helper. Constructed with a pg-compatible `query` executor (TypeORM
-  `dataSource.query`, an embedded PGlite instance, or a node-postgres pool) plus `table`, `dimensions`, `distance`
-  (`cosine`|`l2`|`ip`), and optional `schema` for multi-tenant isolation. Methods: `init`, `upsert`, `upsertMany`,
-  `search`, `delete`, `count`. Same code runs on real Postgres (with pgvector) and embedded PGlite (`vector: true`
-  via `@volcanicminds/backend`). Results normalize TypeORM (array) vs pg/PGlite (`{ rows }`) shapes.
+| Import | Source | Exports |
+| --- | --- | --- |
+| `@volcanicminds/tools/mfa` | `lib/mfa/index.ts` | `generateSecret`, `generateSetupDetails`, `verifyToken`, `verifyTokenDelta`, `generateToken`, type `MfaSetupDetails` |
+| `@volcanicminds/tools/mailer` | `lib/mailer/index.ts` | `Mailer`, types `MailerConfig`, `MailOptions`, `MailAttachment` |
+| `@volcanicminds/tools/logger` | `lib/util/logger.ts` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
+| `@volcanicminds/tools/storage` | `lib/storage/index.ts` | `StorageManager`, types `StorageConfig`, `UploadOptions`, `UploadedObjectInfo` |
+| `@volcanicminds/tools/transfer` | `lib/transfer/index.ts` | `TransferManager`, types `TransferConfig`, `TransferEventCallback`, `TransferValidator`, `TransferRequest`, `AnonymousTransferCheck` |
+| `@volcanicminds/tools/ai` | `lib/ai/index.ts` | see "AI module" |
+| `@volcanicminds/tools/mcp` | `lib/mcp/index.ts` | see "MCP server" |
+| `@volcanicminds/tools` | `index.ts` | namespaces `mfa`, `mailer`, `log`, `storage`, `transfer`, `ai`, `mcp` |
 
-## Testing & Checks
-- Linting: `npm run lint` (ESLint)
-- Type Checking: `npm run type-check`
-- Combined Check: `npm run check-all`
-- Build: `npm run build`
+Prefer the subpaths. The root entry re-exports every module as a namespace
+(`import { mfa, log } from '@volcanicminds/tools'`), so it loads `nodemailer`, `minio` and the tus packages
+even when only one module is used. It does not load the optional peers: `ai`, the provider SDKs,
+`@ai-sdk/otel` and `@modelcontextprotocol/server` are imported dynamically on first use.
+
+## Conventions shared by every module
+
+- Configuration is injected as an object (constructor or function argument). Only `/ai` reads
+  `process.env`, as an explicit fallback when a config value is missing.
+- Modules do not depend on each other, except `/mcp`, which reuses the tool contract of `/ai`
+  (`lib/ai/tool.ts`, no runtime imports).
+- No module starts a process, a timer or a connection at import time.
+
+---
+
+## MFA (`/mfa`)
+
+TOTP (RFC 6238) on `otpauth`, QR codes on `qrcode`. Fixed parameters: SHA1, 6 digits, 30 second period.
+No environment variables.
+
+```typescript
+interface MfaSetupDetails {
+  secret: string // base32
+  uri: string    // the otpauth://totp/ URI
+  qrCode: string // PNG data URL (QRCode.toDataURL of the uri)
+}
+
+function generateSecret(size?: number): string                       // random base32, size in bytes, default 20
+function generateSetupDetails(appName: string, username: string, secret?: string): Promise<MfaSetupDetails>
+function verifyTokenDelta(token: string, secret: string, window?: number): number | null
+function verifyToken(token: string, secret: string, window?: number): boolean
+function generateToken(secret: string): string                       // current code, for tests and tooling
+```
+
+- `generateSetupDetails`: `appName` is the issuer, `username` the label; without `secret` a new 20 byte
+  secret is generated.
+- `verifyTokenDelta` returns the matched time-step offset (0 current, -1 previous, 1 next) or `null`.
+  `window` defaults to 1 (one period either side, about +/- 30 s). An empty token or secret returns `null`.
+  Use the delta for anti-replay: record the absolute step consumed and refuse the same or an earlier step.
+- `verifyToken(token, secret, window)` is `verifyTokenDelta(token, secret, window) !== null`.
+- Errors: a secret that is not valid base32 makes `otpauth` throw (from `verify*`, `generateToken` and
+  `generateSetupDetails` with an explicit secret).
+
+```typescript
+import * as mfa from '@volcanicminds/tools/mfa'
+
+const setup = await mfa.generateSetupDetails('MyApp', 'user@example.com')
+// store setup.secret (encrypted), show setup.qrCode to the user
+const delta = mfa.verifyTokenDelta('123456', setup.secret)
+if (delta === null) throw new Error('Invalid code')
+```
+
+## Mailer (`/mailer`)
+
+`nodemailer` SMTP transport with defaults and a plain text fallback. No environment variables.
+
+```typescript
+interface MailerConfig {
+  host: string
+  port: number
+  secure?: boolean                 // default: port === 465
+  auth?: { user: string; pass: string }
+  defaultFrom?: string
+  defaultReplyTo?: string
+  tls?: { rejectUnauthorized?: boolean; ciphers?: string }
+}
+
+interface MailAttachment { filename: string; content?: string | Buffer; path?: string; contentType?: string; cid?: string }
+
+interface MailOptions {
+  to: string | string[]
+  subject: string
+  html: string                     // required
+  text?: string                    // default: derived from html
+  from?: string                    // default: config.defaultFrom
+  cc?: string | string[]
+  bcc?: string | string[]
+  replyTo?: string                 // default: config.defaultReplyTo
+  attachments?: MailAttachment[]
+}
+
+class Mailer {
+  constructor(config: MailerConfig)
+  send(options: MailOptions): Promise<unknown>   // nodemailer's info object, typed unknown
+  verifyConnection(): Promise<boolean>
+}
+```
+
+- Arrays in `to`, `cc`, `bcc` are joined with `, `.
+- Text fallback: `<br>` becomes a newline, `</p>` two newlines, every other tag is stripped, then trimmed.
+  It does not decode HTML entities and does not sanitize `html`: escape any user data you interpolate.
+- Errors: `send` throws `Error('Email "from" address is required (either in options or config.defaultFrom)')`
+  when neither is set, and wraps a transport failure as `Error('Failed to send email to <to>: <message>')`
+  (the original error is not attached as `cause`). `verifyConnection` never throws: it logs with
+  `console.error` and returns `false`.
+- The return value is `unknown`: cast it (`as { messageId?: string }`) before reading fields.
+
+```typescript
+import { Mailer } from '@volcanicminds/tools/mailer'
+
+const mailer = new Mailer({
+  host: 'smtp.example.com',
+  port: 587,
+  auth: { user: 'smtp-user', pass: 'smtp-password' },
+  defaultFrom: '"My Service" <noreply@example.com>'
+})
+if (!(await mailer.verifyConnection())) throw new Error('SMTP not reachable')
+const info = (await mailer.send({ to: 'user@example.com', subject: 'Hello', html: '<p>Hi</p>' })) as { messageId?: string }
+```
+
+## Logger (`/logger`)
+
+A facade over a Pino-like logger the host process puts on the globals. Each function is
+`(data: unknown, ...args: unknown[]) => void`: `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
+
+- It writes only when `globalThis.isLoggingEnabled` is truthy and `globalThis.log` has the method;
+  otherwise it does nothing and never throws.
+- `@volcanicminds/backend` 5 sets `global.log` but never sets `global.isLoggingEnabled`: inside a backend
+  application these calls are silent until the application sets `global.isLoggingEnabled = true`.
+
+```typescript
+import * as log from '@volcanicminds/tools/logger'
+
+// once, if the host does not set it; the package ships no global type for this flag
+;(globalThis as { isLoggingEnabled?: boolean }).isLoggingEnabled = true
+log.info('Application started')
+log.error({ err: new Error('Oops') }, 'Something went wrong')
+```
+
+## Storage (`/storage`)
+
+S3 compatible object storage on the `minio` client, bound to one bucket. No environment variables.
+
+```typescript
+interface StorageConfig {
+  endPoint: string        // host name, no scheme
+  port: number
+  useSSL: boolean
+  accessKey: string
+  secretKey: string
+  bucket: string
+  region?: string         // default 'us-east-1'
+  pathStyle?: boolean
+}
+interface UploadOptions { size?: number; contentType?: string; metadata?: Record<string, string | number | boolean> }
+interface UploadedObjectInfo { etag: string; versionId: string | null }
+
+class StorageManager {
+  constructor(config: StorageConfig)
+  getClient(): Client                     // the underlying minio Client
+  getBucketName(): string
+  verifyConnection(): Promise<boolean>    // listBuckets; logs with console.error and returns false on failure
+  ensureBucket(bucketName?: string): Promise<void>   // creates it in `region` if missing
+  uploadFile(objectName: string, stream: Readable | Buffer | string, options?: UploadOptions): Promise<UploadedObjectInfo>
+  getFileUrl(objectName: string, expiry?: number): Promise<string>    // presigned GET, seconds, default 86400
+  getUploadUrl(objectName: string, expiry?: number): Promise<string>  // presigned PUT, seconds, default 86400
+  deleteFile(objectName: string): Promise<void>
+  deleteFiles(objectNames: string[]): Promise<void>
+  fileExists(objectName: string): Promise<boolean>
+  getFileStream(objectName: string): Promise<Readable>
+  getFileStat(objectName: string): Promise<BucketItemStat>          // minio's stat object
+}
+```
+
+- Object names are validated: empty, containing `..` or `\`, or starting with `/` or `./` throws
+  `Error('Invalid object name: <name>')` (or `'Object name cannot be empty'`). `deleteFiles` validates every name first.
+- `uploadFile` calls `ensureBucket()` on every upload. A `string` body is uploaded as content, not read as a
+  file path. `options.size` and `options.metadata` reach `putObject`; `options.contentType` is currently
+  ignored: to set the content type, put `'Content-Type'` in `metadata`.
+- `ensureBucket` wraps failures as `Error('Failed to ensure bucket <name>: <error>')`.
+- `fileExists` returns `false` only for minio's `NotFound`; any other error is rethrown.
+
+```typescript
+import { StorageManager } from '@volcanicminds/tools/storage'
+
+const storage = new StorageManager({
+  endPoint: 'minio.example.com', port: 9000, useSSL: true,
+  accessKey: 'access-key', secretKey: 'secret-key', bucket: 'my-bucket'
+})
+await storage.uploadFile('avatars/42.png', pngBuffer, { metadata: { 'Content-Type': 'image/png' } })
+const url = await storage.getFileUrl('avatars/42.png', 3600)
+```
+
+## Transfer (`/transfer`)
+
+Resumable uploads (tus protocol) on `@tus/server` 2, stored on the local disk (`@tus/file-store`) or on S3/Minio
+(`@tus/s3-store`). No environment variables.
+
+```typescript
+interface TransferConfig {
+  driver: 'local' | 's3'
+  path: string                         // URL path the endpoint answers on, e.g. '/files'
+  maxSize?: number                     // bytes; default unlimited
+  local?: { directory: string }        // required with driver 'local'
+  s3?: {                               // required with driver 's3'
+    bucket: string
+    endPoint: string                   // host name, no scheme
+    port?: number
+    useSSL?: boolean                   // default false (http)
+    accessKey: string
+    secretKey: string
+    region?: string                    // default 'us-east-1'
+    partSize?: number                  // bytes, default 8 MiB; S3 minimum is 5 MiB
+  }
+}
+
+type TransferEventCallback = (uploadOrId: Upload | string, req?: IncomingMessage, res?: ServerResponse) => void
+type TransferValidator = (req: IncomingMessage, res: ServerResponse) => Promise<void>
+type TransferRequest = Pick<IncomingMessage, 'headers' | 'method' | 'url'>
+type AnonymousTransferCheck = (req: TransferRequest) => boolean | Promise<boolean>
+
+class TransferManager {
+  constructor(config: TransferConfig)
+  isImplemented(): boolean                          // always true
+  getPath(): string                                 // config.path
+  getServer(): Server                               // the @tus/server instance
+  handle(req: IncomingMessage, res: ServerResponse): Promise<void>  // Node request handler
+  setValidator(validator: TransferValidator): void
+  setAnonymousAccess(check: AnonymousTransferCheck): void
+  isValid(req: TransferRequest): Promise<boolean>
+  onUploadCreate(callback: TransferEventCallback): void     // callback(upload, req)
+  onUploadFinish(callback: TransferEventCallback): void     // callback(upload, req, res)
+  onUploadTerminate(callback: TransferEventCallback): void  // callback(uploadId: string, req, res)
+}
+```
+
+- Construction throws `TransferManager: Local driver requires "directory" path`,
+  `TransferManager: S3 driver requires s3 config object` or `TransferManager: Unsupported driver <x>`.
+- The S3 store uses path-style addressing and the endpoint `http(s)://endPoint[:port]`.
+- The tus server is created with `respectForwardedHeaders: true`: upload URLs are built from
+  `X-Forwarded-Host` and `X-Forwarded-Proto`, so put it behind a proxy that sets or strips them.
+- `setValidator` runs on every request tus handles (`onIncomingRequest`). A validator that throws refuses
+  the request: tus answers with the error's `status_code` and `body` when present, otherwise 500.
+- `isValid` returns `true` only when a check set with `setAnonymousAccess` answers exactly `true`;
+  without a check it returns `false`.
+- Runtime shapes: `@tus/server` 2 converts the Node request to a web `Request` (srvx) before calling hooks.
+  Whatever the declared types say, the validator receives `(request: Request, uploadId: string)`, and the
+  event callbacks receive that `Request` and a web `Response`: read headers with `req.headers.get('name')`.
+  The `Upload` type is `@tus/server`'s; this package does not re-export it.
+
+```typescript
+import { TransferManager } from '@volcanicminds/tools/transfer'
+import * as log from '@volcanicminds/tools/logger'
+
+const transfer = new TransferManager({ driver: 'local', path: '/files', local: { directory: './uploads' } })
+transfer.onUploadFinish((upload) => {
+  if (typeof upload !== 'string') log.info({ id: upload.id, size: upload.size }, 'upload finished')
+})
+```
+
+Without `@volcanicminds/backend`, mount it on any Node or Fastify server. In Fastify 5 call
+`reply.hijack()` after `handle`, and register a content type parser that leaves the body unread, because
+tus streams it itself:
+
+```typescript
+import type { FastifyReply, FastifyRequest } from 'fastify'
+
+async function handler(req: FastifyRequest, reply: FastifyReply) {
+  await transfer.handle(req.raw, reply.raw)
+  reply.hijack() // tus has already written the response
+}
+await fastify.register(async (instance) => {
+  instance.addContentTypeParser('*', (_req, _payload, done) => done(null))
+  instance.all('/files', handler)
+  instance.all('/files/*', handler)
+})
+```
+
+---
+
+## AI module (`/ai`)
+
+Wiring of the AI SDK 7 (`ai`). Every function is async because the SDKs are imported on demand.
+
+### Exports
+
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `createModel` | function | `LanguageModel` from config or env |
+| `createAgent` | function | the SDK's `ToolLoopAgent`, configured |
+| `ConcurrencyGuard`, `ConcurrencyQueueError` | classes | per-provider concurrency limits |
+| `createEmbedder`, `embedText`, `embedTexts` | functions | embeddings |
+| `PgVectorStore` | class | pgvector table helper |
+| `defineTool`, `ToolError`, `ToolCallError`, `isToolError` | function, classes, guard | tool contract |
+| `toAiTools`, `callerContext` | functions | tools as an AI SDK tool set, per-call caller |
+| `ApiCaller`, `ApiMethod`, `ApiRequest`, `ApiResponse`, `ToolContext`, `ToolDefinition`, `ToolInputSchema` | types | tool contract |
+| `AiTools`, `AiCallerContext`, `CallerContext` | types | tool set typing |
+| `ModelConfig`, `AgentConfig`, `ProviderName`, `ConcurrencyConfig`, `EmbedderConfig`, `VectorDistance`, `VectorStoreConfig`, `VectorMatch` | types | configs |
+
+`CallerAgentConfig` and `NoTools` (in `lib/ai/types.ts`) are used by `createAgent`'s overloads but are not
+exported from `/ai`.
+
+### Providers and environment
+
+```typescript
+type ProviderName = 'openai' | 'mistral' | 'ollama' | 'google' | 'anthropic'
+interface ModelConfig { provider: ProviderName; model: string; apiKey?: string; baseUrl?: string }
+```
+
+Resolution order for each value: config, then the variable below. The key read here is passed explicitly to
+the provider SDK's `create*` factory (`createOpenAI`, `createAnthropic`, `createGoogleGenerativeAI`,
+`createMistral`, `createOllama`), so the SDKs' own default instances and their env lookups are never used.
+
+| Variable | Used by | Meaning |
+| --- | --- | --- |
+| `AI_PROVIDER` | `createModel`, `createEmbedder` | provider when the config has none |
+| `AI_EMBEDDING_PROVIDER` | `createEmbedder` | embedding provider, falls back to `AI_PROVIDER` |
+| `OPENAI_API_KEY`, `MISTRAL_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY` | both | API key per provider |
+| `OPENAI_MODEL`, `MISTRAL_MODEL`, `GOOGLE_MODEL`, `ANTHROPIC_MODEL`, `OLLAMA_MODEL` | `createModel` | chat model id |
+| `OPENAI_EMBEDDING_MODEL`, `MISTRAL_EMBEDDING_MODEL`, `GOOGLE_EMBEDDING_MODEL`, `OLLAMA_EMBEDDING_MODEL` | `createEmbedder` | embedding model id |
+| `OLLAMA_BASE_URL` | both | Ollama URL (no key needed); `ai-sdk-ollama` defaults to `http://127.0.0.1:11434` |
+| `AI_TELEMETRY` | all | `false` disables the telemetry registration |
+| `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | all | `true` records prompts, responses, tool arguments and embedded texts in spans |
+
+`baseUrl` is passed as `baseURL` to every provider (custom endpoints, proxies).
+
+### `createModel`
+
+```typescript
+function createModel(config?: ModelConfig): Promise<LanguageModel>
+```
+
+Errors: `AI_PROVIDER is not set and no config provided`, `Unsupported AI Provider: <x>`,
+`Model name is required for provider <x>`, `Missing API Key for <x>` (every provider except `ollama`), and
+`ERR_MODULE_NOT_FOUND` if the provider SDK is not installed.
+
+```typescript
+import { createModel } from '@volcanicminds/tools/ai'
+
+const fromEnv = await createModel() // AI_PROVIDER + <PROVIDER>_MODEL + <PROVIDER>_API_KEY
+const explicit = await createModel({ provider: 'openai', model: 'your-model-id', apiKey: process.env.MY_KEY })
+```
+
+### `createAgent`
+
+```typescript
+type AgentConfig<CALL_OPTIONS = never, TOOLS extends ToolSet = {}> =
+  Omit<ToolLoopAgentSettings<CALL_OPTIONS, TOOLS>, 'id' | 'model'> & { name: string; model: LanguageModel | ModelConfig }
+
+// overload 1: tools from defineTool (an array)
+function createAgent<const DEFS extends readonly ToolDefinition[]>(config: CallerAgentConfig<DEFS>): Promise<ToolLoopAgent<CallerContext, AiTools<DEFS>>>
+// overload 2: SDK tools (a record) or no tools
+function createAgent<CALL_OPTIONS = never, TOOLS extends ToolSet = {}>(config: AgentConfig<CALL_OPTIONS, TOOLS>): Promise<ToolLoopAgent<CALL_OPTIONS, TOOLS>>
+```
+
+- Returns the SDK's `ToolLoopAgent` unchanged in type and behavior. `name` becomes the agent `id` and the
+  default `telemetry.functionId` (a `telemetry` you pass is merged over it). `model` may be a
+  `LanguageModel` or a `ModelConfig` (resolved with `createModel`). Every other key is the SDK's
+  (for example `instructions`, `tools`, `stopWhen`, `prepareStep`, `telemetry`).
+- With `tools` as an array of `defineTool` definitions, `createAgent` builds the tool set itself and writes
+  `prepareCall`; it throws `Agent '<name>': prepareCall, callOptionsSchema, toolsContext carry the caller of
+  tools from defineTool, so createAgent writes them` if the config sets any of those. Each call must pass
+  `options: { caller }`; a call without it does not type-check and throws
+  `Agent '<name>': no caller, pass options: { caller } with the call` before the model runs.
+- Tools from `defineTool` (array) and SDK tools (record) cannot be mixed in one agent.
+
+```typescript
+import { tool } from 'ai'
+import { z } from 'zod'
+import { createAgent } from '@volcanicminds/tools/ai'
+
+const auditor = await createAgent({
+  name: 'auditor',
+  model: { provider: 'openai', model: 'your-model-id' },
+  instructions: 'You are an auditor.',
+  tools: {
+    invoice: tool({
+      description: 'An invoice by number',
+      inputSchema: z.object({ number: z.string() }),
+      execute: async ({ number }) => ({ number, total: 100 })
+    })
+  }
+})
+const { text } = await auditor.generate({ prompt: 'Check invoice 42' })
+```
+
+### `ConcurrencyGuard`
+
+```typescript
+interface ConcurrencyConfig { [provider: string]: number }
+class ConcurrencyGuard {
+  constructor(customLimits?: ConcurrencyConfig)   // merged over the defaults
+  acquire(provider: string): Promise<void>        // waits in a FIFO queue when the limit is reached
+  release(provider: string): void                 // call in finally; unknown provider is a no-op
+  run<T>(provider: string, task: () => Promise<T>): Promise<T>  // acquire, task, release
+}
+class ConcurrencyQueueError extends Error {}     // name 'ConcurrencyQueueError'
+```
+
+- Defaults: `openai` 5, `mistral` 10, `google` 10, `anthropic` 5, `ollama` 2; any other provider name 2.
+  Provider names are lower-cased. A limit of `0` falls back to 2.
+- Each provider queue holds at most 100 waiters; the 101st `acquire` throws
+  `ConcurrencyQueueError('Queue size limit of 100 reached')`.
+- The guard is in-process only and is not applied automatically by `createModel` or `createAgent`: wrap
+  the calls yourself, sharing one guard instance.
+
+```typescript
+import { ConcurrencyGuard } from '@volcanicminds/tools/ai'
+
+const guard = new ConcurrencyGuard({ ollama: 1 })
+const result = await guard.run('openai', () => auditor.generate({ prompt: 'Check invoice 42' }))
+```
+
+### Telemetry
+
+- The first call of `createModel`, `createAgent`, `createEmbedder`, `embedText` or `embedTexts` registers
+  the AI SDK's OpenTelemetry integration (`new OpenTelemetry({ embedding: true })` from `@ai-sdk/otel`),
+  once per process, when `@ai-sdk/otel` is installed and `AI_TELEMETRY` is not `false`. If the package is
+  missing nothing happens; any other import error is thrown.
+- If an `OpenTelemetry` integration is already registered (`globalThis.AI_SDK_TELEMETRY_INTEGRATIONS`), none
+  is added.
+- Content (prompts, instructions, responses, tool arguments and results, embedded texts) stays out of spans
+  unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`. A call's or agent's own
+  `telemetry.recordInputs` or `recordOutputs` wins over that default.
+- The registry is process-wide: after registration every AI SDK call in the process is traced with the same
+  content default, including direct `generateText` or `embed` calls. Calls made before it are not.
+- Spans go to the tracer provider already running (with `@volcanicminds/backend`, the one `preload()` starts
+  from the `OTEL_*` variables).
+- `@ai-sdk/otel` depends on an exact `ai` version; a different `ai` 7 release in the application means two
+  copies of `ai` in `node_modules`. It still works because the registry lives on `globalThis`.
+
+```typescript
+const agent = await createAgent({ name: 'auditor', model, telemetry: { recordInputs: true } })
+```
+
+### Embeddings
+
+```typescript
+interface EmbedderConfig { provider?: ProviderName; model?: string; apiKey?: string; baseUrl?: string }
+
+function createEmbedder(config?: EmbedderConfig): Promise<EmbeddingModel>
+function embedText(text: string, modelOrConfig?: EmbeddingModel | EmbedderConfig): Promise<number[]>
+function embedTexts(texts: string[], modelOrConfig?: EmbeddingModel | EmbedderConfig): Promise<number[][]>
+```
+
+- Providers: `openai`, `mistral`, `google`, `ollama`. `anthropic` throws
+  `Anthropic does not provide an embeddings API; use openai, mistral, google or ollama`.
+- Other errors: `AI_EMBEDDING_PROVIDER/AI_PROVIDER is not set and no config provided`,
+  `Unsupported AI Provider: <x>`, `Embedding model name is required for provider <x>`, `Missing API Key for <x>`.
+- `embedText` and `embedTexts` accept a ready model (an object with a string `modelId`) or a config; they
+  call the SDK's `embed` and `embedMany`. Pass a model created once to avoid re-resolving it per call.
+
+```typescript
+import { createEmbedder, embedText, embedTexts } from '@volcanicminds/tools/ai'
+
+const embedder = await createEmbedder({ provider: 'openai', model: 'your-embedding-model' })
+const vector = await embedText('hello world', embedder)
+const vectors = await embedTexts(['a', 'b'], embedder)
+```
+
+### `PgVectorStore`
+
+pgvector helper over any executor with the shape `(sql, params) => Promise<rows[] | { rows }>`: a
+node-postgres pool, a PGlite instance, or the `raw.query` of a `@volcanicminds/backend` 5 data handle.
+
+```typescript
+type VectorDistance = 'l2' | 'cosine' | 'ip'      // operators <->, <=>, <#> (negative inner product)
+interface VectorStoreConfig {
+  query: (sql: string, params?: unknown[]) => Promise<any>
+  table?: string              // default 'embeddings'
+  dimensions: number          // must match the embedding model
+  distance?: VectorDistance   // default 'cosine'
+  schema?: string             // optional schema qualifier
+}
+interface VectorMatch { id: string; content: string; metadata: Record<string, unknown> | null; distance: number }
+
+class PgVectorStore {
+  constructor(config: VectorStoreConfig)
+  init(): Promise<void>       // CREATE EXTENSION IF NOT EXISTS vector; CREATE SCHEMA (if schema); CREATE TABLE IF NOT EXISTS
+  upsert(id: string, content: string, embedding: number[], metadata?: Record<string, unknown>): Promise<void>
+  upsertMany(rows: Array<{ id: string; content: string; embedding: number[]; metadata?: Record<string, unknown> }>): Promise<void>
+  search(embedding: number[], k?: number): Promise<VectorMatch[]>   // k default 5, nearest first
+  delete(id: string): Promise<void>
+  count(): Promise<number>
+}
+```
+
+- Table: `id text PRIMARY KEY, content text NOT NULL, metadata jsonb, embedding vector(<dimensions>) NOT NULL`.
+  No index is created; add an HNSW or IVFFlat index yourself for large tables.
+- `upsert` is `INSERT ... ON CONFLICT (id) DO UPDATE`; `upsertMany` runs one statement per row, not in a
+  transaction.
+- Errors: the constructor throws without `query` or with `dimensions < 1`; `upsert` and `search` throw
+  `PgVectorStore: embedding length <n> does not match configured dimensions <d>`; SQL errors propagate.
+- `table` and `schema` are interpolated as double-quoted identifiers without escaping: pass trusted
+  constants only, never request input.
+- `vector(n)` and `::vector` are written unqualified, so the `vector` type must resolve through the
+  connection's `search_path`.
+- The database needs the pgvector extension available. `@volcanicminds/backend` 5 opens PGlite without
+  extensions, so its embedded engine cannot run `init()`; use a Postgres server with pgvector, or a PGlite
+  you create with `extensions: { vector }` from `@electric-sql/pglite-pgvector`.
+
+```typescript
+import { PGlite } from '@electric-sql/pglite'
+import { vector } from '@electric-sql/pglite-pgvector'
+import { PgVectorStore, embedText } from '@volcanicminds/tools/ai'
+
+const pg = await PGlite.create({ extensions: { vector } })
+const store = new PgVectorStore({ query: (sql, params) => pg.query(sql, params), table: 'documents', dimensions: 1536 })
+await store.init()
+await store.upsert('doc-1', 'the text', await embedText('the text'), { source: 'docs' })
+const matches = await store.search(await embedText('a query'), 5)
+```
+
+### Tools (`defineTool`, `toAiTools`, `callerContext`)
+
+A tool is defined once and served by two adapters: `toAiTools` (AI SDK) and `createMcpHandler` (`/mcp`).
+A tool reaches the application only through `context.call`, an API caller bound to the end user's
+credential, so it sees what that person would see.
+
+```typescript
+type ToolInputSchema<INPUT = unknown> = StandardSchemaV1<unknown, INPUT> & StandardJSONSchemaV1<unknown, INPUT>
+type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+interface ApiRequest { method: ApiMethod; path: string; query?: Record<string, string>; body?: unknown }
+interface ApiResponse { status: number; body: unknown }
+type ApiCaller = (request: ApiRequest) => Promise<ApiResponse>
+interface ToolContext { call: <T = unknown>(request: ApiRequest) => Promise<T> }
+interface ToolDefinition<NAME extends string = string, INPUT = unknown, OUTPUT = unknown> {
+  readonly name: NAME
+  readonly description: string
+  readonly input: ToolInputSchema<INPUT>
+  execute(input: INPUT, context: ToolContext): Promise<OUTPUT>
+}
+
+function defineTool<const NAME extends string, SCHEMA extends ToolInputSchema, OUTPUT>(definition: {
+  name: NAME; description: string; input: SCHEMA
+  execute: (input: StandardSchemaV1.InferOutput<SCHEMA>, context: ToolContext) => Promise<OUTPUT>
+}): ToolDefinition<NAME, StandardSchemaV1.InferOutput<SCHEMA>, OUTPUT>   // frozen
+
+class ToolError extends Error { constructor(message: string, options?: ErrorOptions) }
+class ToolCallError extends ToolError { readonly status: number; readonly code: string | undefined; constructor(response: ApiResponse) }
+function isToolError(error: unknown): error is ToolError
+
+type CallerContext = { caller: ApiCaller }
+function toAiTools<const DEFS extends readonly ToolDefinition[]>(definitions: DEFS): AiTools<DEFS>
+function callerContext<const DEFS extends readonly ToolDefinition[]>(definitions: DEFS, caller: ApiCaller): AiCallerContext<DEFS>
+```
+
+- `input` must be Standard Schema and Standard JSON Schema at once: Zod 4.2 or later qualifies, Zod 3 does
+  not.
+- `defineTool` throws when `name` does not match `/^[a-zA-Z0-9_-]{1,64}$/` or `description` is blank.
+  `toAiTools` and `createMcpHandler` throw `Tool '<name>' is defined twice` on duplicate names.
+- `call` accepts an API path only. A path that does not start with `/` or that resolves to another origin
+  (`//host`, `/\host`) throws a `ToolError` before the caller runs. A 2xx resolves with `body`; any other
+  status throws `ToolCallError`, whose message is `<code>: <message>` from the response body (or
+  `HTTP <status>`), with `status` and `code` set.
+- Error exposure: a `ToolError` (including `ToolCallError`) reaches the model or the MCP client with its
+  message. Any other thrown error becomes `ToolError("Tool '<name>' failed")` with the original as `cause`.
+- `isToolError` checks a `Symbol.for('volcanicminds.tools.ToolError')` brand, so it works across two copies
+  of the package; prefer it to `instanceof`.
+- `toAiTools` builds the tool set once (it holds no identity). Each `generateText` or `streamText` call passes
+  `toolsContext: callerContext(tools, caller)`. A call without it does not type-check, and at runtime the
+  SDK rejects the context (`No caller: pass callerContext(tools, caller) as the toolsContext of the call`)
+  before any tool runs.
+
+```typescript
+import { generateText } from 'ai'
+import { z } from 'zod'
+import { defineTool, toAiTools, callerContext, ToolError, type ApiCaller } from '@volcanicminds/tools/ai'
+
+const listVehicles = defineTool({
+  name: 'list_vehicles',
+  description: 'Vehicles on sale, newest first',
+  input: z.object({ brand: z.string().optional() }),
+  execute: async (input, { call }) => {
+    if (input.brand === '') throw new ToolError('brand cannot be empty')
+    return call({ method: 'GET', path: '/vehicles', query: input.brand ? { brand: input.brand } : {} })
+  }
+})
+const tools = [listVehicles] as const
+const aiTools = toAiTools(tools) // once, at startup
+
+// per request: `caller` acts as the authenticated user (see the backend section)
+const { text } = await generateText({ model, tools: aiTools, toolsContext: callerContext(tools, caller), prompt })
+
+// the same tools in an agent, built once, caller per call
+const sales = await createAgent({ name: 'sales', model, instructions: 'Answer about the stock.', tools })
+const answer = await sales.generate({ prompt, options: { caller } })
+```
+
+---
+
+## MCP server (`/mcp`)
+
+A stateless MCP server over Streamable HTTP, built on `createMcpHandler` of `@modelcontextprotocol/server` 2,
+serving tools from `defineTool`. Install `@modelcontextprotocol/server`; `ai` is not needed.
+
+Exports: `createMcpHandler`; types `McpHandlerConfig`, `McpRequestOptions`, `McpHandler`; re-exported from
+the tool contract: `defineTool`, `ToolError`, `ToolCallError`, `isToolError`, types `ApiCaller`, `ApiMethod`,
+`ApiRequest`, `ApiResponse`, `ToolContext`, `ToolDefinition`, `ToolInputSchema`.
+
+```typescript
+interface McpHandlerConfig {
+  name: string                          // announced to the client
+  version: string
+  tools: readonly ToolDefinition[]
+  allowedOrigins: readonly string[]     // exact browser origins, required
+  onError?: (error: unknown, tool: string) => void
+}
+interface McpRequestOptions { caller: ApiCaller; parsedBody?: unknown }
+interface McpHandler {
+  fetch(request: Request, options: McpRequestOptions): Promise<Response>
+  close(): Promise<void>
+}
+function createMcpHandler(config: McpHandlerConfig): Promise<McpHandler>
+```
+
+- Web standard: the application converts its request to a `Request` (method, absolute URL, headers) and
+  sends back the `Response`. Pass a body the framework already parsed as `parsedBody`. Fastify 5
+  `reply.send()` accepts a web `Response` as it is.
+- No authentication inside: mount it on an authenticated route of your own and pass, per request, the
+  `caller` for that user. The caller reaches the tools through `AsyncLocalStorage`.
+- Origin check (DNS rebinding defense): a request whose `Origin` header is not in `allowedOrigins` gets
+  403 with a JSON-RPC error body (`code -32000`, `Origin not allowed`) before any tool runs; a request
+  without `Origin` (a non-browser client) passes; `[]` admits no browser.
+- `allowedOrigins` entries must be exact origins (`scheme://host[:port]`): `*`, a path, a trailing slash or
+  `null` make `createMcpHandler` throw `allowedOrigins: '<entry>' is not an origin, write it as scheme://host[:port]`.
+- Tool results are returned as one text content item (strings as they are, anything else
+  `JSON.stringify`). A failing tool returns `isError: true` with the `ToolError` message; `onError` receives
+  the error's `cause` when it has one, which is always the case when the tool threw something other than a
+  `ToolError` (the original error).
+- Duplicate tool names throw at creation.
+
+```typescript
+import { createMcpHandler } from '@volcanicminds/tools/mcp'
+
+const mcp = await createMcpHandler({
+  name: 'sales',
+  version: '1.0.0',
+  tools,
+  allowedOrigins: ['https://console.example.com'],
+  onError: (error, tool) => log.error({ error, tool }, 'tool failed')
+})
+// inside your authenticated route
+const response = await mcp.fetch(request, { caller, parsedBody: req.body })
+```
+
+---
+
+## With `@volcanicminds/backend` 5
+
+The backend imports nothing from this package. The application builds managers on top of it and injects
+them into `startServer()` (contracts in the backend's `types/global.d.ts`).
+
+```typescript
+import { preload, start as startServer } from '@volcanicminds/backend'
+import { start as startDataLayer } from '@volcanicminds/backend/db'
+import * as mfa from '@volcanicminds/tools/mfa'
+import { Mailer } from '@volcanicminds/tools/mailer'
+import { TransferManager } from '@volcanicminds/tools/transfer'
+
+await preload()
+const layer = await startDataLayer()
+
+// MfaManagement: generateSetup + verify returning the time-step delta (the backend uses it against replays)
+const mfaManager = {
+  isImplemented: () => true,
+  generateSetup: (appName: string, email: string) => mfa.generateSetupDetails(appName, email),
+  verify: (token: string, secret: string) => mfa.verifyTokenDelta(token, secret)
+}
+
+// ChallengeDeliveryManagement: the backend hands over data (code, purpose, locale), the app writes the message
+const mailer = new Mailer({ host: 'smtp.example.com', port: 587, defaultFrom: 'noreply@example.com' })
+const challengeDeliveryManager = {
+  isImplemented: () => true,
+  deliver: async ({ to, code }: { to: string; code: string }) => {
+    await mailer.send({ to, subject: 'Your sign-in code', html: `<p>${code}</p>` })
+  }
+}
+
+// TransferManagement: TransferManager implements it as it is; the backend mounts it at getPath()
+const transferManager = new TransferManager({ driver: 'local', path: '/files', local: { directory: './uploads' } })
+
+await startServer({ ...layer, mfaManager, challengeDeliveryManager, transferManager })
+```
+
+- Transfer: the backend mounts the tus endpoint at `getPath()` with its own content type parser and
+  `reply.hijack()`. Requests with a valid credential are served; a request with no or an invalid credential
+  gets 401 `UNAUTHORIZED` unless `transferManager.isValid(req)` (your `setAnonymousAccess` check, which
+  receives the Fastify request) answers `true`, the way to accept signed upload links. Which authenticated
+  subject may upload what is the application's decision. The tus validator and hooks receive the web
+  `Request` that `@tus/server` builds from the raw Node request, not the Fastify request, so `req.user` is
+  not on it.
+- Challenge delivery: for login codes (`purpose` `identify` or `verify`) the backend calls `deliver` after
+  the response and does not await it (so mail latency does not reveal whether an account exists); a failure
+  becomes a log line. For a tenant destruction code (`purpose: 'destruction'`) it awaits `deliver`, and a
+  failure answers 503 `DESTRUCTION_FACTOR_NOT_AVAILABLE`. The full message type is
+  `ChallengeDelivery` (`channel`, `to`, `code`, `purpose`, `expiresAt`, `plane`, `tenantId`, `subjectId`, `locale`).
+- Logger: the backend sets `global.log` but not `global.isLoggingEnabled`; set it to `true` if you want
+  `@volcanicminds/tools/logger` to write.
+- Vector store on the backend's data layer: use the handle's raw SQL, which runs inside the tenant's
+  container (`access` from `@volcanicminds/backend/db`, `dataContext` from `@volcanicminds/backend`):
+  `new PgVectorStore({ query: (sql, params) => access(dataContext(req)).raw.query(sql, params), dimensions: 1536 })`.
+  On a tenant handle with the `schema` strategy each statement runs with `SET LOCAL search_path` set to the
+  tenant schema only, so the `vector` type must be resolvable from there (see `PgVectorStore`). Create the
+  table and the extension in a migration or at startup, not per request.
+- Tools and MCP: the backend knows nothing about MCP or agents. A caller that acts as the request's user can
+  replay the request's own credential through `server.inject` (cookie in `COOKIE` mode, `authorization`
+  in `BEARER` mode):
+
+```typescript
+import type { ApiCaller } from '@volcanicminds/tools/ai'
+
+const callerFor = (req: FastifyRequest): ApiCaller => async ({ method, path, query, body }) => {
+  const response = await server.inject({
+    method, url: path, query, payload: body as object | undefined,
+    headers: { cookie: req.headers.cookie ?? '' }
+  })
+  return { status: response.statusCode, body: response.body ? response.json() : null }
+}
+```
+
+- Telemetry: `preload()` starts the OpenTelemetry SDK from the `OTEL_*` variables; AI spans from this
+  package join it when `@ai-sdk/otel` is installed.
+
+## Defaults and limits
+
+| Module | Setting | Default |
+| --- | --- | --- |
+| mfa | algorithm, digits, period | SHA1, 6, 30 s |
+| mfa | secret size | 20 bytes |
+| mfa | verification `window` | 1 (about +/- 30 s) |
+| mailer | `secure` | `port === 465` |
+| storage | `region` | `us-east-1` |
+| storage | presigned URL expiry | 86400 s (24 h) |
+| transfer | S3 `partSize` | 8 MiB (S3 minimum 5 MiB) |
+| transfer | `maxSize` | unlimited |
+| transfer | S3 `region`, addressing | `us-east-1`, path style |
+| ai | concurrency | openai 5, mistral 10, google 10, anthropic 5, ollama 2, other 2 |
+| ai | concurrency queue | 100 waiters per provider |
+| ai | `PgVectorStore` | table `embeddings`, distance `cosine`, `k` 5 |
+
+## Not in this package
+
+- No TypeORM or Drizzle integration and no database connection of its own: `PgVectorStore` takes a query
+  function. `global.connection` does not exist in `@volcanicminds/backend` 5.
+- No HTTP routes: the backend (or the application) mounts the transfer endpoint and the MCP handler.
+- No email templates, no SMS sender, no login endpoints.
