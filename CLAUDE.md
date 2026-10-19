@@ -57,7 +57,7 @@ Cablaggio dell'**AI SDK 7**. API: `createModel(config?)`, `createAgent(config)` 
 - La registrazione è per processo e non si azzera: i suoi test lanciano ogni scenario in un processo nuovo (`test/fixtures/ai-telemetry.ts`), con le span raccolte in memoria.
 - Sotto mocha gli spec si caricano con `require()`: con tsx gli import statici di `ai` nello spec sono una copia CommonJS, diversa dall'`import()` dinamico della lib. Per confronti di identità (`instanceof`) nei test, prendere la classe con `await import('ai')`.
 
-> Nota AI: quando si lavora su questo modulo, i modelli Claude più recenti sono Opus/Sonnet/Haiku 4.x e Fable 5 — non hardcodare vecchi id (es. `claude-3-5-sonnet`) presi dal README come default.
+> Nota AI: quando si lavora su questo modulo, i modelli Claude più recenti, al 19 ottobre 2026, sono la famiglia 5 (`claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-1`); non hardcodare come default i vecchi id degli esempi del README (es. `claude-3-5-sonnet-20240620`).
 
 ## Paradigmi (da `llms.txt`)
 
@@ -71,4 +71,4 @@ Transfer S3 `partSize` 8MB (min 5MB), `maxSize` illimitato; MFA `window`=1 (±30
 
 ## File chiave
 
-`index.ts` (re-export namespace), `lib/main.ts`, e le cartelle `lib/{ai,mailer,mfa,storage,transfer}`. Doc: `README.md`, `llms.txt`, `docs/limits.md`.
+`index.ts` (re-export namespace) e le cartelle `lib/{ai,mailer,mcp,mfa,storage,transfer,util}`. Doc: `README.md`, `llms.txt`, `docs/limits.md`.
