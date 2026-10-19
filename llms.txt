@@ -2,7 +2,7 @@
 
 > Tree-shakeable TypeScript utilities for the Volcanic Minds stack: TOTP MFA, SMTP mailer, logger
 > facade, S3/Minio storage, resumable uploads (tus), AI SDK 7 wiring (models, agents, embeddings,
-> pgvector store, tools) and an MCP server for the same tools. Version 0.2.x, branch `v5`, paired with
+> pgvector store, tools) and an MCP server for the same tools. Version 5.0.0, branch `v5`, paired with
 > `@volcanicminds/backend` 5.x. The source in `lib/` is the authority when this file and the code differ.
 
 ## Requirements
