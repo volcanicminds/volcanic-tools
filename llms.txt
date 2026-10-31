@@ -234,6 +234,8 @@ interface TransferConfig {
   driver: 'local' | 's3'
   path: string                         // URL path the endpoint answers on, e.g. '/files'
   maxSize?: number                     // bytes; default unlimited
+  expireAfterMs?: number               // unfinished uploads older than this are deleted; default 24 h, 0 never
+  expireFinishedAfterMs?: number       // finished uploads idle this long are deleted; default 0, never
   local?: { directory: string }        // required with driver 'local'
   s3?: {                               // required with driver 's3'
     bucket: string
@@ -248,7 +250,7 @@ interface TransferConfig {
 }
 
 type TransferEventCallback = (uploadOrId: Upload | string, req?: IncomingMessage, res?: ServerResponse) => void
-type TransferValidator = (req: IncomingMessage, res: ServerResponse) => Promise<void>
+type TransferValidator = (req: Request, uploadId: string) => Promise<void>  // the web Request tus built
 type TransferRequest = Pick<IncomingMessage, 'headers' | 'method' | 'url'>
 type AnonymousTransferCheck = (req: TransferRequest) => boolean | Promise<boolean>
 
@@ -257,7 +259,9 @@ class TransferManager {
   isImplemented(): boolean                          // always true
   getPath(): string                                 // config.path
   getServer(): Server                               // the @tus/server instance
-  handle(req: IncomingMessage, res: ServerResponse): Promise<void>  // Node request handler
+  handle(req: IncomingMessage, res: ServerResponse, owner?: string): Promise<void>  // Node request handler
+  cleanUpExpired(): Promise<number>                 // deletes the expired uploads, returns how many
+  close(): void                                     // stops the sweep of expired uploads
   setValidator(validator: TransferValidator): void
   setAnonymousAccess(check: AnonymousTransferCheck): void
   isValid(req: TransferRequest): Promise<boolean>
@@ -268,7 +272,24 @@ class TransferManager {
 ```
 
 - Construction throws `TransferManager: Local driver requires "directory" path`,
-  `TransferManager: S3 driver requires s3 config object` or `TransferManager: Unsupported driver <x>`.
+  `TransferManager: S3 driver requires s3 config object`, `TransferManager: Unsupported driver <x>` or
+  `TransferManager: expireAfterMs must be a whole number of milliseconds, 0 or more` (the same for
+  `expireFinishedAfterMs`).
+- Owner: `handle(req, res, owner)` binds an upload the request creates to `owner`, kept in the upload's
+  metadata under `owner`; the key a client sends is dropped, so only the server writes it. A request to an
+  upload bound to another owner (HEAD, PATCH, GET, DELETE), or with no owner, gets tus's 404, as for an
+  upload that does not exist. An upload created without an owner is reached by its id alone. The check
+  runs before the validator. `@volcanicminds/backend` passes the subject of the request.
+- Expiry: an unfinished upload is deleted `expireAfterMs` after its creation, and tus answers 410 for it
+  in the meantime. A finished one is kept unless `expireFinishedAfterMs` is set: then it is deleted that
+  long after its last byte (the file's last write; on S3 the object's), for an application that moves
+  every upload elsewhere once finished and leaves behind the ones nobody came for. The manager sweeps on
+  its own every `min(expireAfterMs, expireFinishedAfterMs, 1 hour)` over those above 0 (an unref'd
+  timer, so it never keeps the process alive; `close()` stops it); a failed sweep is written to
+  `console.error`. On S3 the finished sweep lists the bucket and deletes only an object that has the
+  `.info` of its upload beside it, with that `.info`. The local store's own sweep (`@tus/file-store`
+  2.0.0) judges uploads by the offset saved at creation and would delete the finished ones too: the
+  manager replaces it with one that reads the file's size.
 - The S3 store uses path-style addressing and the endpoint `http(s)://endPoint[:port]`.
 - The tus server is created with `respectForwardedHeaders: true`: upload URLs are built from
   `X-Forwarded-Host` and `X-Forwarded-Proto`, so put it behind a proxy that sets or strips them.
@@ -277,8 +298,9 @@ class TransferManager {
 - `isValid` returns `true` only when a check set with `setAnonymousAccess` answers exactly `true`;
   without a check it returns `false`.
 - Runtime shapes: `@tus/server` 2 converts the Node request to a web `Request` (srvx) before calling hooks.
-  Whatever the declared types say, the validator receives `(request: Request, uploadId: string)`, and the
-  event callbacks receive that `Request` and a web `Response`: read headers with `req.headers.get('name')`.
+  The validator receives `(request: Request, uploadId: string)`, as `TransferValidator` declares. The event
+  callbacks receive that `Request` and a web `Response`, whatever `TransferEventCallback` declares: read
+  headers with `req.headers.get('name')`.
   The `Upload` type is `@tus/server`'s; this package does not re-export it.
 
 ```typescript

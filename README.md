@@ -205,6 +205,8 @@ const transfer = new TransferManager({
   driver: 'local', // or 's3'
   path: '/files', // The HTTP endpoint path (e.g. http://localhost:3000/files)
   maxSize: 10 * 1024 * 1024 * 1024, // 10 GB
+  expireAfterMs: 24 * 60 * 60 * 1000, // unfinished uploads go after a day (the default); 0 keeps them
+  expireFinishedAfterMs: 0, // finished uploads are kept (the default); set it if you move each one elsewhere
 
   // If driver is 'local'
   local: {
@@ -238,8 +240,13 @@ check given to `setAnonymousAccess` answers `true` for it, a signed upload link 
 transfer.setAnonymousAccess((req) => verifyUploadSignature(req.headers['x-upload-signature']))
 ```
 
-`setValidator` is a different gate: it runs inside tus on every request that got this far, and a
-validator that throws refuses the request.
+`setValidator` is a different gate: it runs inside tus on every request that got this far, with the
+web `Request` tus builds and the upload's id, and a validator that throws refuses the request.
+
+Each upload belongs to whoever created it: the backend passes the request's subject to `handle`, and
+an upload bound to one subject answers 404 to every other, as if it did not exist. An upload left
+unfinished is deleted after `expireAfterMs`, a finished one after `expireFinishedAfterMs` from its last
+byte when you set it; the manager sweeps on its own.
 
 #### Integration with Fastify/Node Key
 
