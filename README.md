@@ -264,15 +264,20 @@ fastify.all('/files/*', async (req, reply) => {
 
 #### Events
 
-You can listen for upload lifecycle events:
+You can listen for upload lifecycle events. Each hook gets the upload (its id alone on terminate) and the web
+`Request` tus built from the Node one; finish and terminate also get the web `Response`:
 
 ```typescript
-transfer.onUploadCreate((upload, req, res) => {
-  console.log('Upload started:', upload.id)
+transfer.onUploadCreate((upload, req) => {
+  console.log('Upload started:', upload.id, req.headers.get('user-agent'))
 })
 
 transfer.onUploadFinish((upload, req, res) => {
   console.log('Upload finished:', upload.id)
+})
+
+transfer.onUploadTerminate((id) => {
+  console.log('Upload deleted:', id)
 })
 ```
 

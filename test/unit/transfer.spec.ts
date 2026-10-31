@@ -17,6 +17,7 @@ import type { AddressInfo } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { Readable } from 'stream'
+import { S3 as S3Client } from '@aws-sdk/client-s3'
 import { EVENTS, Upload } from '@tus/server'
 import { TransferManager } from '../../lib/transfer/index.js'
 
@@ -341,6 +342,96 @@ describe('TransferManager', () => {
     })
   })
 
+  describe('on a real S3', function () {
+    // Only with `TRANSFER_S3_URL`, e.g. http://user:password@127.0.0.1:9000 of a MinIO: the stores'
+    // calls to S3 are what a fake client cannot vouch for. Each run takes a bucket of its own.
+    const target = process.env.TRANSFER_S3_URL ? new URL(process.env.TRANSFER_S3_URL) : undefined
+    const bucket = `transfer-test-${Date.now()}`
+    let client: S3Client
+    let manager: TransferManager
+    let http: HttpServer
+    let base: string
+
+    before(async function () {
+      if (!target) return this.skip()
+      const credentials = {
+        accessKeyId: decodeURIComponent(target.username),
+        secretAccessKey: decodeURIComponent(target.password)
+      }
+      client = new S3Client({ endpoint: target.origin, region: 'us-east-1', forcePathStyle: true, credentials })
+      await client.createBucket({ Bucket: bucket })
+      manager = new TransferManager({
+        driver: 's3',
+        path: '/files',
+        s3: {
+          bucket,
+          endPoint: target.hostname,
+          port: Number(target.port),
+          useSSL: target.protocol === 'https:',
+          ...{ accessKey: credentials.accessKeyId, secretKey: credentials.secretAccessKey }
+        },
+        expireAfterMs: 1000,
+        expireFinishedAfterMs: 1000
+      })
+      // Swept by hand below, when the test says.
+      manager.close()
+      http = createServer((req, res) => void manager.handle(req, res))
+      await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve))
+      base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+    })
+    after(async () => {
+      if (!target) return
+      await new Promise((resolve) => http.close(resolve))
+      const left = (await client.listObjectsV2({ Bucket: bucket })).Contents ?? []
+      if (left.length)
+        await client.deleteObjects({ Bucket: bucket, Delete: { Objects: left.map(({ Key }) => ({ Key })) } })
+      for (const open of (await client.listMultipartUploads({ Bucket: bucket })).Uploads ?? []) {
+        await client.abortMultipartUpload({ Bucket: bucket, Key: open.Key, UploadId: open.UploadId })
+      }
+      await client.deleteBucket({ Bucket: bucket })
+    })
+
+    const tus = { 'Tus-Resumable': '1.0.0' }
+    /** An upload of `size` bytes with `sent` of them written: its id. */
+    const upload = async (size: number, sent: string) => {
+      const created = await fetch(`${base}/files`, {
+        method: 'POST',
+        headers: { ...tus, 'Upload-Length': String(size) }
+      })
+      expect(created.status).toBe(201)
+      const url = created.headers.get('location')!
+      const patched = await fetch(url, {
+        method: 'PATCH',
+        headers: { ...tus, 'Upload-Offset': '0', 'Content-Type': 'application/offset+octet-stream' },
+        body: sent
+      })
+      expect(patched.status).toBe(204)
+      return url.split('/').pop()!
+    }
+    const keys = async () =>
+      ((await client.listObjectsV2({ Bucket: bucket })).Contents ?? []).map(({ Key }) => Key!).sort()
+
+    it('removes a finished upload, whose multipart upload S3 has long completed', async () => {
+      const id = await upload(5, 'hello')
+      expect(await keys()).toEqual([id, `${id}.info`].sort())
+      expect((await fetch(`${base}/files/${id}`, { method: 'DELETE', headers: tus })).status).toBe(204)
+      expect(await keys()).toEqual([])
+    })
+
+    it('sweeps the finished and the unfinished uploads past their time, and nothing tus did not write', async () => {
+      await client.putObject({ Bucket: bucket, Key: 'report.pdf', Body: 'not an upload' })
+      const finished = await upload(5, 'hello')
+      const unfinished = await upload(10, 'hello')
+      expect(await keys()).toEqual(
+        [finished, `${finished}.info`, `${unfinished}.info`, `${unfinished}.part`, 'report.pdf'].sort()
+      )
+      await new Promise((resolve) => setTimeout(resolve, 1100))
+      expect(await manager.cleanUpExpired()).toBe(2)
+      expect(await keys()).toEqual(['report.pdf'])
+      expect((await client.listMultipartUploads({ Bucket: bucket })).Uploads ?? []).toEqual([])
+    })
+  })
+
   describe('the contract with @volcanicminds/backend', () => {
     // `TransferManagement` in the backend's types/global.d.ts. The two packages do not depend on
     // each other; volcanic-backend-sample type-checks the assignment where both are installed.
@@ -419,6 +510,37 @@ describe('TransferManager', () => {
       manager.onUploadCreate((u, r) => seen.push([u, r]))
       ;(manager.getServer() as any).emit(EVENTS.POST_CREATE, req, upload, 'https://host/files/abc')
       expect(seen).toEqual([[upload, req]])
+    })
+
+    it('hands every hook the web Request tus built, and finish and terminate the web Response', async () => {
+      const manager = local()
+      const seen: unknown[][] = []
+      manager.onUploadCreate((u, r, s) => seen.push(['create', u.size, r.headers.get('upload-length'), s?.status]))
+      manager.onUploadFinish((u, r, s) => seen.push(['finish', u.offset, r.headers.get('upload-offset'), s?.status]))
+      manager.onUploadTerminate((id, r, s) => seen.push(['terminate', typeof id, r.method, s?.status]))
+      const http = createServer((req, res) => void manager.handle(req, res))
+      await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve))
+      try {
+        const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+        const tus = { 'Tus-Resumable': '1.0.0' }
+        const url = (
+          await fetch(`${base}/files`, { method: 'POST', headers: { ...tus, 'Upload-Length': '5' } })
+        ).headers.get('location')!
+        await fetch(url, {
+          method: 'PATCH',
+          headers: { ...tus, 'Upload-Offset': '0', 'Content-Type': 'application/offset+octet-stream' },
+          body: 'hello'
+        })
+        await fetch(url, { method: 'DELETE', headers: tus })
+        expect(seen).toEqual([
+          ['create', 5, '5', undefined],
+          ['finish', 5, '0', 204],
+          ['terminate', 'string', 'DELETE', 204]
+        ])
+      } finally {
+        await new Promise((resolve) => http.close(resolve))
+        manager.close()
+      }
     })
   })
 })

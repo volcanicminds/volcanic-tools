@@ -83,10 +83,10 @@ class ExpiringFileStore extends FileStore {
 
 /**
  * The S3 store, whose sweep also deletes the finished uploads `finishedExpiration` after their
- * object was written; its own takes the unfinished ones alone, the multipart uploads still open.
- * Only what tus wrote goes: an object with the `.info` of its upload beside it, and that `.info`.
- * They are deleted directly, not through `remove`, which first aborts the upload's multipart
- * upload, long completed on a finished one.
+ * object was written, and counts uploads: the sweep of @tus/s3-store 2.0.1 takes the unfinished
+ * ones alone, the multipart uploads still open, and counts the objects it deleted, two each.
+ * Of the finished ones only what tus wrote goes: an object with the `.info` of its upload beside
+ * it, and that `.info`.
  */
 class ExpiringS3Store extends S3Store {
   constructor(
@@ -97,8 +97,40 @@ class ExpiringS3Store extends S3Store {
   }
 
   async deleteExpired(): Promise<number> {
-    const unfinished = await super.deleteExpired()
-    if (this.finishedExpiration <= 0) return unfinished
+    return (await this.deleteUnfinished()) + (await this.deleteFinished())
+  }
+
+  private async deleteUnfinished(): Promise<number> {
+    const expiration = this.getExpiration()
+    if (expiration <= 0) return 0
+    const now = Date.now()
+    let deleted = 0
+    let keyMarker: string | undefined
+    let uploadIdMarker: string | undefined
+    do {
+      const page = await this.client.listMultipartUploads({
+        Bucket: this.bucket,
+        KeyMarker: keyMarker,
+        UploadIdMarker: uploadIdMarker
+      })
+      const expired = (page.Uploads ?? []).filter(
+        (open): open is typeof open & { Key: string; UploadId: string } =>
+          !!open.Key && !!open.UploadId && !!open.Initiated && now > open.Initiated.getTime() + expiration
+      )
+      await this.deleteKeys(expired.flatMap(({ Key }) => [this.infoKey(Key), this.partKey(Key, true)]))
+      await Promise.all(
+        expired.map(({ Key, UploadId }) => this.client.abortMultipartUpload({ Bucket: this.bucket, Key, UploadId }))
+      )
+      await Promise.all(expired.map(({ Key }) => this.clearCache(Key)))
+      deleted += expired.length
+      ;[keyMarker, uploadIdMarker] = page.IsTruncated ? [page.NextKeyMarker, page.NextUploadIdMarker] : []
+    } while (keyMarker !== undefined)
+    return deleted
+  }
+
+  /** Deleted in batches, not with a `remove` each, which would also abort a multipart upload long completed. */
+  private async deleteFinished(): Promise<number> {
+    if (this.finishedExpiration <= 0) return 0
     const written = new Map<string, number>()
     let token: string | undefined
     do {
@@ -112,12 +144,16 @@ class ExpiringS3Store extends S3Store {
     const expired = [...written]
       .filter(([key, at]) => written.has(this.infoKey(key)) && now > at + this.finishedExpiration)
       .map(([key]) => key)
-    const keys = expired.flatMap((id) => [{ Key: id }, { Key: this.infoKey(id) }])
-    for (let i = 0; i < keys.length; i += S3_DELETE_BATCH) {
-      await this.client.deleteObjects({ Bucket: this.bucket, Delete: { Objects: keys.slice(i, i + S3_DELETE_BATCH) } })
-    }
+    await this.deleteKeys(expired.flatMap((id) => [id, this.infoKey(id)]))
     await Promise.all(expired.map((id) => this.clearCache(id)))
-    return unfinished + expired.length
+    return expired.length
+  }
+
+  private async deleteKeys(keys: string[]): Promise<void> {
+    for (let i = 0; i < keys.length; i += S3_DELETE_BATCH) {
+      const batch = keys.slice(i, i + S3_DELETE_BATCH).map((Key) => ({ Key }))
+      await this.client.deleteObjects({ Bucket: this.bucket, Delete: { Objects: batch } })
+    }
   }
 }
 
@@ -156,7 +192,15 @@ export interface TransferConfig {
   }
 }
 
-export type TransferEventCallback = (uploadOrId: Upload | string, req?: IncomingMessage, res?: ServerResponse) => void
+/**
+ * A hook on an upload's event: the upload, only its id on terminate, the web `Request` tus built
+ * from the Node one and, except on create, the web `Response` it answers with.
+ */
+export type TransferEventCallback<T extends Upload | string = Upload> = (
+  uploadOrId: T,
+  req: Request,
+  res?: Response
+) => void
 /**
  * A gate tus runs on every request it handles: the web `Request` `@tus/server` builds from the Node
  * one, and the upload's id (a fresh one on a creation). Throwing refuses the request.
@@ -308,28 +352,23 @@ export class TransferManager {
     return this.server
   }
 
-  // Hook system wrappers with double casting (as unknown) to bypass TS structural check
-
   // POST_CREATE is emitted as (req, upload, url), with no response: one argument fewer than the
-  // other two hooks, and in a different order. Read as (req, res, upload) it handed the consumer
-  // the URL string where the Upload belongs, which no type could catch downstream because the
-  // callback takes `Upload | string` for the sake of POST_TERMINATE.
+  // other two hooks, and in a different order. POST_TERMINATE has the upload's id alone.
   public onUploadCreate(callback: TransferEventCallback): void {
     this.server.on(EVENTS.POST_CREATE, (req, upload) => {
-      callback(upload, req as unknown as IncomingMessage)
+      callback(upload, req)
     })
   }
 
   public onUploadFinish(callback: TransferEventCallback): void {
     this.server.on(EVENTS.POST_FINISH, (req, res, upload) => {
-      callback(upload, req as unknown as IncomingMessage, res as unknown as ServerResponse)
+      callback(upload, req, res)
     })
   }
 
-  public onUploadTerminate(callback: TransferEventCallback): void {
-    // Note: POST_TERMINATE passes 'id' (string) instead of 'upload' object in recent tus versions
+  public onUploadTerminate(callback: TransferEventCallback<string>): void {
     this.server.on(EVENTS.POST_TERMINATE, (req, res, id) => {
-      callback(id, req as unknown as IncomingMessage, res as unknown as ServerResponse)
+      callback(id, req, res)
     })
   }
 
