@@ -11,7 +11,7 @@
 // anything.
 //
 import { expect } from 'expect'
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdtempSync, readdirSync, rmSync } from 'fs'
 import { createServer, type Server as HttpServer } from 'http'
 import type { AddressInfo } from 'net'
 import { tmpdir } from 'os'
@@ -190,6 +190,17 @@ describe('TransferManager', () => {
       expect((await patch(url, 'token:1')).status).toBe(204)
     })
 
+    it("removes on request every upload of the owners named, finished or not, and leaves the others'", async () => {
+      const [half, whole] = [await create('gone/token:1'), await create('gone/token:2')]
+      expect((await patch(whole, 'gone/token:2')).status).toBe(204)
+      const [other, nobody] = [await create('kept/token:1'), await create()]
+      expect(await manager.removeOwned((owner) => owner.startsWith('gone/'))).toBe(2)
+      const ids = [half, whole].map((url) => url.split('/').pop()!)
+      expect(readdirSync(directory).filter((name) => ids.some((id) => name.startsWith(id)))).toEqual([])
+      expect([(await head(half, 'gone/token:1')).status, (await head(whole, 'gone/token:2')).status]).toEqual([404, 404])
+      expect([(await head(other, 'kept/token:1')).status, (await head(nobody)).status]).toEqual([200, 200])
+    })
+
     it('hands the validator the web Request tus built, and the id of the upload', async () => {
       const seen: [string | null, string][] = []
       manager.setValidator(async (req, id) => {
@@ -324,6 +335,49 @@ describe('TransferManager', () => {
       }
     })
 
+    it("on S3, removes on request every upload of the owners named, its multipart upload aborted, and leaves the others'", async () => {
+      // A bucket in memory: each upload's `.info`, as tus writes it, and the multipart upload it opened.
+      const info: Record<string, { owner?: string; open: string }> = {
+        finished: { owner: 'gone/token:1', open: 'mp-1' },
+        unfinished: { owner: 'gone/token:2', open: 'mp-2' },
+        other: { owner: 'kept/token:1', open: 'mp-3' },
+        nobody: { open: 'mp-4' }
+      }
+      const keys = [...Object.keys(info).flatMap((id) => [id, `${id}.info`]), 'unfinished.part', 'report.pdf']
+      const [deleted, aborted]: string[][] = [[], []]
+      const manager = new TransferManager({ driver: 's3', path: '/files', s3: S3, expireAfterMs: 0 })
+      const store: any = manager.getServer().datastore
+      store.client = {
+        async listObjectsV2() {
+          return { Contents: keys.map((Key) => ({ Key, LastModified: new Date() })), IsTruncated: false }
+        },
+        async getObject({ Key }: { Key: string }) {
+          const { owner, open } = info[Key.replace(/\.info$/, '')]
+          const upload = { size: 5, offset: 0, metadata: owner ? { owner } : {}, creation_date: new Date().toISOString() }
+          return { Metadata: { 'upload-id': open }, Body: { transformToString: async () => JSON.stringify(upload) } }
+        },
+        async abortMultipartUpload({ Key, UploadId }: { Key: string; UploadId: string }) {
+          // S3's answer for the one it completed when the last byte arrived.
+          if (Key === 'finished') throw Object.assign(new Error('The specified upload does not exist'), { name: 'NoSuchUpload' })
+          aborted.push(UploadId)
+          return {}
+        },
+        async deleteObjects({ Delete }: { Delete: { Objects: { Key: string }[] } }) {
+          deleted.push(...Delete.Objects.map((object) => object.Key))
+          return {}
+        }
+      }
+      try {
+        expect(await manager.removeOwned((owner) => owner.startsWith('gone/'))).toBe(2)
+        expect(aborted).toEqual(['mp-2'])
+        expect(deleted.sort()).toEqual(
+          ['finished', 'finished.info', 'finished.part', 'unfinished', 'unfinished.info', 'unfinished.part'].sort()
+        )
+      } finally {
+        manager.close()
+      }
+    })
+
     it('expires the unfinished after 24 hours and keeps the finished unless told otherwise, and 0 keeps them', () => {
       const store = (over: any = {}) => local(over).getServer().datastore as any
       expect([store().getExpiration(), store().finishedExpiration]).toEqual([24 * 60 * 60 * 1000, 0])
@@ -375,7 +429,8 @@ describe('TransferManager', () => {
       })
       // Swept by hand below, when the test says.
       manager.close()
-      http = createServer((req, res) => void manager.handle(req, res))
+      // The owner from a header the test sets, as in the owner tests above.
+      http = createServer((req, res) => void manager.handle(req, res, req.headers['x-owner'] as string | undefined))
       await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve))
       base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
     })
@@ -430,12 +485,44 @@ describe('TransferManager', () => {
       expect(await keys()).toEqual(['report.pdf'])
       expect((await client.listMultipartUploads({ Bucket: bucket })).Uploads ?? []).toEqual([])
     })
+
+    it("removes on request the finished and unfinished uploads of the owners named, and leaves the others'", async () => {
+      const owned = (owner: string) => async () => {
+        const created = await fetch(`${base}/files`, { method: 'POST', headers: { ...tus, 'Upload-Length': '10', 'x-owner': owner } })
+        return created.headers.get('location')!.split('/').pop()!
+      }
+      const send = (id: string, owner: string, body: string, offset = 0) =>
+        fetch(`${base}/files/${id}`, {
+          method: 'PATCH',
+          headers: { ...tus, 'x-owner': owner, 'Upload-Offset': String(offset), 'Content-Type': 'application/offset+octet-stream' },
+          body
+        })
+      const [finished, unfinished, other] = [await owned('gone/token:1')(), await owned('gone/token:2')(), await owned('kept/token:1')()]
+      expect((await send(finished, 'gone/token:1', 'helloworld')).status).toBe(204)
+      expect((await send(unfinished, 'gone/token:2', 'hello')).status).toBe(204)
+      expect(await manager.removeOwned((owner) => owner.startsWith('gone/'))).toBe(2)
+      // `report.pdf`, which the test above put and tus did not write, stays too.
+      expect(await keys()).toEqual([`${other}.info`, 'report.pdf'].sort())
+      const open = ((await client.listMultipartUploads({ Bucket: bucket })).Uploads ?? []).map(({ Key }) => Key)
+      expect(open).toEqual([other])
+      await manager.removeOwned(() => true)
+    })
   })
 
   describe('the contract with @volcanicminds/backend', () => {
     // `TransferManagement` in the backend's types/global.d.ts. The two packages do not depend on
     // each other; volcanic-backend-sample type-checks the assignment where both are installed.
-    const CONTRACT = ['isImplemented', 'getPath', 'getServer', 'onUploadCreate', 'onUploadFinish', 'onUploadTerminate', 'handle', 'isValid']
+    const CONTRACT = [
+      'isImplemented',
+      'getPath',
+      'getServer',
+      'onUploadCreate',
+      'onUploadFinish',
+      'onUploadTerminate',
+      'handle',
+      'isValid',
+      'removeOwned'
+    ]
     const anonymous = { headers: {}, method: 'POST', url: '/files' }
 
     it('has every method the backend calls', () => {

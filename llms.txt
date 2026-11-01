@@ -261,6 +261,7 @@ class TransferManager {
   getServer(): Server                               // the @tus/server instance
   handle(req: IncomingMessage, res: ServerResponse, owner?: string): Promise<void>  // Node request handler
   cleanUpExpired(): Promise<number>                 // deletes the expired uploads, returns how many
+  removeOwned(owns: (owner: string) => boolean): Promise<number>  // deletes the uploads of the owners named, returns how many
   close(): void                                     // stops the sweep of expired uploads
   setValidator(validator: TransferValidator): void
   setAnonymousAccess(check: AnonymousTransferCheck): void
@@ -280,6 +281,10 @@ class TransferManager {
   upload bound to another owner (HEAD, PATCH, GET, DELETE), or with no owner, gets tus's 404, as for an
   upload that does not exist. An upload created without an owner is reached by its id alone. The check
   runs before the validator. `@volcanicminds/backend` passes the subject of the request.
+- Removal by owner: `removeOwned(owns)` deletes at once every upload whose owner `owns` answers true
+  for, finished or not, and answers how many went; an upload with no owner stays. On S3 it deletes the
+  object or the part and the `.info`, and aborts the multipart upload of an unfinished one.
+  `@volcanicminds/backend` calls it when it destroys a tenant, for the tenant's uploads.
 - Expiry: an unfinished upload is deleted `expireAfterMs` after its creation, and tus answers 410 for it
   in the meantime. A finished one is kept unless `expireFinishedAfterMs` is set: then it is deleted that
   long after its last byte (the file's last write; on S3 the object's), for an application that moves

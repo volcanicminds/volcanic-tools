@@ -23,6 +23,12 @@ const findUpload = (store: { getUpload(id: string): Promise<Upload> }, id: strin
     throw error
   })
 
+/** Whether `owns` names the owner of `upload`; an upload with no owner is nobody's. */
+const ownedBy = (upload: Upload, owns: (owner: string) => boolean): boolean => {
+  const owner = upload.metadata?.[OWNER]
+  return owner != null && owns(owner)
+}
+
 /** A whole number of milliseconds, 0 or more; `fallback` when absent. */
 function milliseconds(name: string, value: number | undefined, fallback: number): number {
   const ms = value ?? fallback
@@ -47,13 +53,23 @@ class ExpiringFileStore extends FileStore {
     super(options)
   }
 
-  async deleteExpired(): Promise<number> {
-    if (!this.configstore.list) throw ERRORS.UNSUPPORTED_EXPIRATION_EXTENSION
+  deleteExpired(): Promise<number> {
     const now = Date.now()
+    return this.removeWhere((upload) => this.expired(upload, now))
+  }
+
+  /** Deletes every upload whose owner `owns` names, finished or not: how many went. */
+  removeOwned(owns: (owner: string) => boolean): Promise<number> {
+    return this.removeWhere((upload) => ownedBy(upload, owns))
+  }
+
+  /** Deletes every upload `picked` says, one gone meanwhile counting as none: how many went. */
+  private async removeWhere(picked: (upload: Upload) => boolean | Promise<boolean>): Promise<number> {
+    if (!this.configstore.list) throw ERRORS.UNSUPPORTED_EXPIRATION_EXTENSION
     let deleted = 0
     for (const id of await this.configstore.list()) {
       const upload = await findUpload(this, id)
-      if (!upload || !(await this.expired(upload, now))) continue
+      if (!upload || !(await picked(upload))) continue
       await this.remove(id).then(
         () => deleted++,
         (error) => {
@@ -128,9 +144,51 @@ class ExpiringS3Store extends S3Store {
     return deleted
   }
 
+  /**
+   * Deletes every upload whose owner `owns` names, finished or not: its object or its part, its
+   * `.info`, and for an unfinished one the multipart upload S3 keeps open. Every upload has its
+   * `.info`, written at its creation, and the owner is in it.
+   */
+  async removeOwned(owns: (owner: string) => boolean): Promise<number> {
+    const info = this.infoKey('')
+    const ids = [...(await this.objects()).keys()].filter((key) => key.endsWith(info)).map((key) => key.slice(0, -info.length))
+    let deleted = 0
+    for (const id of ids) {
+      const metadata = await this.getMetadata(id).catch((error) => {
+        if (gone(error) || error?.name === 'NoSuchKey') return undefined
+        throw error
+      })
+      if (!metadata || !ownedBy(metadata.file, owns)) continue
+      if (metadata['upload-id']) {
+        // S3 answers NoSuchUpload for one already completed, or aborted meanwhile.
+        await this.client
+          .abortMultipartUpload({ Bucket: this.bucket, Key: id, UploadId: metadata['upload-id'] })
+          .catch((error: { name?: string }) => {
+            if (error?.name !== 'NoSuchUpload') throw error
+          })
+      }
+      await this.deleteKeys([id, this.infoKey(id), this.partKey(id, true)])
+      await this.clearCache(id)
+      deleted++
+    }
+    return deleted
+  }
+
   /** Deleted in batches, not with a `remove` each, which would also abort a multipart upload long completed. */
   private async deleteFinished(): Promise<number> {
     if (this.finishedExpiration <= 0) return 0
+    const written = await this.objects()
+    const now = Date.now()
+    const expired = [...written]
+      .filter(([key, at]) => written.has(this.infoKey(key)) && now > at + this.finishedExpiration)
+      .map(([key]) => key)
+    await this.deleteKeys(expired.flatMap((id) => [id, this.infoKey(id)]))
+    await Promise.all(expired.map((id) => this.clearCache(id)))
+    return expired.length
+  }
+
+  /** Every object of the bucket, by key, with when it was last written. */
+  private async objects(): Promise<Map<string, number>> {
     const written = new Map<string, number>()
     let token: string | undefined
     do {
@@ -140,13 +198,7 @@ class ExpiringS3Store extends S3Store {
       }
       token = page.IsTruncated ? page.NextContinuationToken : undefined
     } while (token)
-    const now = Date.now()
-    const expired = [...written]
-      .filter(([key, at]) => written.has(this.infoKey(key)) && now > at + this.finishedExpiration)
-      .map(([key]) => key)
-    await this.deleteKeys(expired.flatMap((id) => [id, this.infoKey(id)]))
-    await Promise.all(expired.map((id) => this.clearCache(id)))
-    return expired.length
+    return written
   }
 
   private async deleteKeys(keys: string[]): Promise<void> {
@@ -271,6 +323,15 @@ export class TransferManager {
    */
   public cleanUpExpired(): Promise<number> {
     return this.server.cleanUpExpiredUploads()
+  }
+
+  /**
+   * Deletes every upload whose owner (the one `handle` bound it to) `owns` names, finished or not,
+   * now and not at the sweep: a tenant destroyed takes its uploads with it. An upload with no owner
+   * is nobody's and stays. Answers how many went.
+   */
+  public removeOwned(owns: (owner: string) => boolean): Promise<number> {
+    return (this.server.datastore as ExpiringFileStore | ExpiringS3Store).removeOwned(owns)
   }
 
   /** Stops the sweep of expired uploads. */
